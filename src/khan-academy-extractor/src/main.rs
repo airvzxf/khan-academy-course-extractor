@@ -31,42 +31,40 @@ const DATA_STRUCT: DataStruct = DataStruct {
     parent_relative_url: "parentRelativeUrl",
 };
 
-fn store_info_to_csv(
+fn create_csv_file_with_headers(filename: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let file = std::fs::File::create(filename)?;
+    let mut writer = std::io::BufWriter::new(file);
+
+    // Write header row
+    let header_row = format!(
+        "{},{},{},{},{},{},{},{},{},{},{},{}\n",
+        DATA_STRUCT.id,
+        DATA_STRUCT.type_name,
+        DATA_STRUCT.order,
+        DATA_STRUCT.title,
+        DATA_STRUCT.slug,
+        DATA_STRUCT.relative_url,
+        DATA_STRUCT.progress_key,
+        DATA_STRUCT.parent_id,
+        DATA_STRUCT.parent_type,
+        DATA_STRUCT.parent_title,
+        DATA_STRUCT.parent_slug,
+        DATA_STRUCT.parent_relative_url,
+    );
+    writer.write_all(header_row.as_bytes())?;
+
+    Ok(())
+}
+
+fn append_data_to_csv(
     content: &serde_json::Value,
     filename: &str,
-    append: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let open_mode: std::io::Result<std::fs::File> = if append {
-        std::fs::OpenOptions::new().append(true).open(filename)
-    } else {
-        std::fs::File::create(filename)
-    };
-
-    let file: std::fs::File = open_mode?;
-    let mut writer: std::io::BufWriter<std::fs::File> = std::io::BufWriter::new(file);
-
-    if !append {
-        // Write header row only if the file is being created
-        let header_row: String = format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{}\n",
-            DATA_STRUCT.id,
-            DATA_STRUCT.type_name,
-            DATA_STRUCT.order,
-            DATA_STRUCT.title,
-            DATA_STRUCT.slug,
-            DATA_STRUCT.relative_url,
-            DATA_STRUCT.progress_key,
-            DATA_STRUCT.parent_id,
-            DATA_STRUCT.parent_type,
-            DATA_STRUCT.parent_title,
-            DATA_STRUCT.parent_slug,
-            DATA_STRUCT.parent_relative_url,
-        );
-        writer.write_all(header_row.as_bytes())?;
-    }
+    let file = std::fs::OpenOptions::new().append(true).open(filename)?;
+    let mut writer = std::io::BufWriter::new(file);
 
     // Write extracted content row
-    let row: String = format!(
+    let row = format!(
         "{},{},{},{},{},{},{},{},{},{},{},{}\n",
         content[&DATA_STRUCT.id],
         content[&DATA_STRUCT.type_name],
@@ -213,23 +211,14 @@ fn extract_course(
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     const JSON_FILE_CONTENT_FOR_PATH: &str = "resources/math-2nd-grade-contentForPath.json";
     const OUTPUT_CSV_FILE: &str = "resources/math-2nd-grade-information.csv";
-    const CREATE_CONTENT: bool = false;
-    const APPEND_CONTENT: bool = true;
 
     let json_content = read_json_file(JSON_FILE_CONTENT_FOR_PATH)?;
     let course_content = extract_course_content(&json_content)?;
     let course = extract_course(&course_content)?;
 
-    for (index, data) in course.iter().enumerate() {
-        store_info_to_csv(
-            data,
-            OUTPUT_CSV_FILE,
-            if index == 0 {
-                CREATE_CONTENT
-            } else {
-                APPEND_CONTENT
-            },
-        )?;
+    create_csv_file_with_headers(OUTPUT_CSV_FILE)?;
+    for data in course.iter() {
+        append_data_to_csv(data, OUTPUT_CSV_FILE)?;
     }
 
     Ok(())
