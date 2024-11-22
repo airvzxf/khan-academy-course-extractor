@@ -31,7 +31,9 @@ const DATA_STRUCT: DataStruct = DataStruct {
     parent_relative_url: "parentRelativeUrl",
 };
 
-fn create_csv_file_with_headers(filename: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn create_csv_file_with_headers<P: AsRef<std::path::Path>>(
+    filename: P,
+) -> Result<(), Box<dyn std::error::Error>> {
     let file = std::fs::File::create(filename)?;
     let mut writer = std::io::BufWriter::new(file);
 
@@ -56,9 +58,9 @@ fn create_csv_file_with_headers(filename: &str) -> Result<(), Box<dyn std::error
     Ok(())
 }
 
-fn append_data_to_csv(
+fn append_data_to_csv<P: AsRef<std::path::Path>>(
     content: &serde_json::Value,
-    filename: &str,
+    filename: P,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let file = std::fs::OpenOptions::new().append(true).open(filename)?;
     let mut writer = std::io::BufWriter::new(file);
@@ -84,21 +86,11 @@ fn append_data_to_csv(
     Ok(())
 }
 
-/// Reads the contents of a JSON file located at the given path.
-///
-/// # Parameters
-///
-/// * `path` - A reference to a string representing the path to the JSON file.
-///
-/// # Returns
-///
-/// * `Ok(String)` - If the file is successfully read and its contents are parsed into a string,
-///   the string is returned.
-/// * `Err(Box<dyn std::error::Error>)` - If any error occurs during file reading or parsing,
-///   an error is returned.
-fn read_json_file(path: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let mut file: std::fs::File = std::fs::File::open(path)?;
-    let mut contents: String = String::new();
+fn read_json_file<P: AsRef<std::path::Path>>(
+    path: P,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let mut file = std::fs::File::open(path)?;
+    let mut contents = String::new();
     file.read_to_string(&mut contents)?;
 
     Ok(contents)
@@ -115,8 +107,45 @@ fn extract_course(
 ) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
     let mut all_info = Vec::new();
 
-    // Extract course info
-    let course_info = serde_json::json!({
+    let course_info = extract_course_info(course_content)?;
+    all_info.push(course_info.clone());
+
+    let units = course_content["unitChildren"]
+        .as_array()
+        .ok_or_else(|| "Expected an array for unitChildren")?;
+
+    for (unit_order, unit) in units.iter().enumerate() {
+        let unit_info = extract_unit_info(unit, &course_info, unit_order)?;
+        all_info.push(unit_info.clone());
+
+        let lessons = unit["allOrderedChildren"]
+            .as_array()
+            .ok_or_else(|| "Expected an array for allOrderedChildren")?;
+
+        for (lesson_order, lesson) in lessons.iter().enumerate() {
+            let lesson_info = extract_lesson_info(lesson, &unit_info, lesson_order)?;
+            all_info.push(lesson_info.clone());
+
+            if lesson["__typename"] == "Lesson" {
+                let contents = lesson["curatedChildren"]
+                    .as_array()
+                    .ok_or_else(|| "Expected an array for curatedChildren")?;
+
+                for (content_order, content) in contents.iter().enumerate() {
+                    let content_info = extract_content_info(content, &lesson_info, content_order)?;
+                    all_info.push(content_info.clone());
+                }
+            }
+        }
+    }
+
+    Ok(all_info)
+}
+
+fn extract_course_info(
+    course_content: &serde_json::Value,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    Ok(serde_json::json!({
         DATA_STRUCT.id: course_content["id"],
         DATA_STRUCT.type_name: course_content["__typename"],
         DATA_STRUCT.order: 1,
@@ -128,84 +157,73 @@ fn extract_course(
         DATA_STRUCT.parent_title: course_content["parent"]["translatedTitle"],
         DATA_STRUCT.parent_slug: course_content["parent"]["slug"],
         DATA_STRUCT.parent_relative_url: course_content["parent"]["relativeUrl"],
-    });
-    all_info.push(course_info.clone());
+    }))
+}
 
-    // Extract units info
-    let units = course_content["unitChildren"]
-        .as_array()
-        .ok_or("Expected an array for unitChildren")?;
+fn extract_unit_info(
+    unit: &serde_json::Value,
+    course_info: &serde_json::Value,
+    unit_order: usize,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    Ok(serde_json::json!({
+        DATA_STRUCT.id: unit["id"],
+        DATA_STRUCT.type_name: unit["__typename"],
+        DATA_STRUCT.order: unit_order + 1,
+        DATA_STRUCT.title: unit["translatedTitle"],
+        DATA_STRUCT.slug: unit["slug"],
+        DATA_STRUCT.relative_url: unit["relativeUrl"],
+        DATA_STRUCT.parent_id: course_info[DATA_STRUCT.id],
+        DATA_STRUCT.parent_type: course_info[DATA_STRUCT.type_name],
+        DATA_STRUCT.parent_title: course_info[DATA_STRUCT.title],
+        DATA_STRUCT.parent_slug: course_info[DATA_STRUCT.slug],
+        DATA_STRUCT.parent_relative_url: course_info[DATA_STRUCT.relative_url],
+    }))
+}
 
-    for (unit_order, unit) in units.iter().enumerate() {
-        let unit_info = serde_json::json!({
-            DATA_STRUCT.id: unit["id"],
-            DATA_STRUCT.type_name: unit["__typename"],
-            DATA_STRUCT.order: unit_order + 1,
-            DATA_STRUCT.title: unit["translatedTitle"],
-            DATA_STRUCT.slug: unit["slug"],
-            DATA_STRUCT.relative_url: unit["relativeUrl"],
-            DATA_STRUCT.parent_id: course_info["id"],
-            DATA_STRUCT.parent_type: course_info["typeName"],
-            DATA_STRUCT.parent_title: course_info["title"],
-            DATA_STRUCT.parent_slug: course_info["slug"],
-            DATA_STRUCT.parent_relative_url: course_info["relativeUrl"],
-        });
-        all_info.push(unit_info.clone());
+fn extract_lesson_info(
+    lesson: &serde_json::Value,
+    unit_info: &serde_json::Value,
+    lesson_order: usize,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    Ok(serde_json::json!({
+        DATA_STRUCT.id: lesson["id"],
+        DATA_STRUCT.type_name: lesson["__typename"],
+        DATA_STRUCT.order: lesson_order + 1,
+        DATA_STRUCT.title: lesson["translatedTitle"],
+        DATA_STRUCT.slug: lesson["slug"],
+        DATA_STRUCT.relative_url: if lesson["__typename"] != "Lesson" {
+            lesson["urlWithinCurationNode"].clone()
+        } else {
+            lesson["relativeUrl"].clone()
+        },
+        DATA_STRUCT.progress_key: lesson["progressKey"],
+        DATA_STRUCT.parent_id: unit_info[DATA_STRUCT.id],
+        DATA_STRUCT.parent_type: unit_info[DATA_STRUCT.type_name],
+        DATA_STRUCT.parent_title: unit_info[DATA_STRUCT.title],
+        DATA_STRUCT.parent_slug: unit_info[DATA_STRUCT.slug],
+        DATA_STRUCT.parent_relative_url: unit_info[DATA_STRUCT.relative_url],
+    }))
+}
 
-        // Extract lessons info
-        let lessons = unit["allOrderedChildren"]
-            .as_array()
-            .ok_or("Expected an array for allOrderedChildren")?;
-
-        for (lesson_order, lesson) in lessons.iter().enumerate() {
-            let lesson_info = serde_json::json!({
-                DATA_STRUCT.id: lesson["id"],
-                DATA_STRUCT.type_name: lesson["__typename"],
-                DATA_STRUCT.order: lesson_order + 1,
-                DATA_STRUCT.title: lesson["translatedTitle"],
-                DATA_STRUCT.slug: lesson["slug"],
-                DATA_STRUCT.relative_url: if lesson["__typename"] != "Lesson" {
-                    lesson["urlWithinCurationNode"].clone()
-                } else {
-                    lesson["relativeUrl"].clone()
-                },
-                DATA_STRUCT.progress_key: lesson["progressKey"],
-                DATA_STRUCT.parent_id: unit["id"],
-                DATA_STRUCT.parent_type: unit["__typename"],
-                DATA_STRUCT.parent_title: unit["translatedTitle"],
-                DATA_STRUCT.parent_slug: unit["slug"],
-                DATA_STRUCT.parent_relative_url: unit["relativeUrl"],
-            });
-            all_info.push(lesson_info.clone());
-
-            // Extract contents info
-            if lesson["__typename"] == "Lesson" {
-                let contents = lesson["curatedChildren"]
-                    .as_array()
-                    .ok_or("Expected an array for curatedChildren")?;
-
-                for (content_order, content) in contents.iter().enumerate() {
-                    let content_info = serde_json::json!({
-                        DATA_STRUCT.id: content["id"],
-                        DATA_STRUCT.type_name: content["__typename"],
-                        DATA_STRUCT.order: content_order + 1,
-                        DATA_STRUCT.title: content["translatedTitle"],
-                        DATA_STRUCT.slug: content["slug"],
-                        DATA_STRUCT.relative_url: content["urlWithinCurationNode"],
-                        DATA_STRUCT.progress_key: content["progressKey"],
-                        DATA_STRUCT.parent_id: lesson["id"],
-                        DATA_STRUCT.parent_type: lesson["__typename"],
-                        DATA_STRUCT.parent_title: lesson["translatedTitle"],
-                        DATA_STRUCT.parent_slug: lesson["slug"],
-                        DATA_STRUCT.parent_relative_url: lesson["relativeUrl"],
-                    });
-                    all_info.push(content_info.clone());
-                }
-            }
-        }
-    }
-
-    Ok(all_info)
+fn extract_content_info(
+    content: &serde_json::Value,
+    lesson_info: &serde_json::Value,
+    content_order: usize,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    Ok(serde_json::json!({
+        DATA_STRUCT.id: content["id"],
+        DATA_STRUCT.type_name: content["__typename"],
+        DATA_STRUCT.order: content_order + 1,
+        DATA_STRUCT.title: content["translatedTitle"],
+        DATA_STRUCT.slug: content["slug"],
+        DATA_STRUCT.relative_url: content["urlWithinCurationNode"],
+        DATA_STRUCT.progress_key: content["progressKey"],
+        DATA_STRUCT.parent_id: lesson_info[DATA_STRUCT.id],
+        DATA_STRUCT.parent_type: lesson_info[DATA_STRUCT.type_name],
+        DATA_STRUCT.parent_title: lesson_info[DATA_STRUCT.title],
+        DATA_STRUCT.parent_slug: lesson_info[DATA_STRUCT.slug],
+        DATA_STRUCT.parent_relative_url: lesson_info[DATA_STRUCT.relative_url],
+    }))
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
