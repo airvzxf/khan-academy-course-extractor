@@ -139,38 +139,30 @@ fn extract_units_info(
         .as_array()
         .ok_or_else(|| "Expected an array for unitChildren")?;
 
-    let extracted_parent: Result<serde_json::Value, serde_json::Error> =
-        extract_course_info(json_content);
+    let parent_info = extract_course_info(json_content)
+        .map_err(|e| format!("Failed to extract parent information: {}", e))?;
 
-    match extracted_parent {
-        Ok(parent_info) => {
-            let extracted_units: Vec<serde_json::Value> = units
-                .iter()
-                .enumerate()
-                .map(|(order, unit)| {
-                    serde_json::json!({
-                        DATA_STRUCT.id: unit["id"],
-                        DATA_STRUCT.type_name: unit["__typename"],
-                        DATA_STRUCT.order: order + 1,
-                        DATA_STRUCT.title: unit["translatedTitle"],
-                        DATA_STRUCT.slug: unit["slug"],
-                        DATA_STRUCT.relative_url: unit["relativeUrl"],
-                        DATA_STRUCT.parent_id: parent_info["id"],
-                        DATA_STRUCT.parent_type: parent_info["typeName"],
-                        DATA_STRUCT.parent_title: parent_info["title"],
-                        DATA_STRUCT.parent_slug: parent_info["slug"],
-                        DATA_STRUCT.parent_relative_url: parent_info["relativeUrl"],
-                    })
-                })
-                .collect();
+    let extracted_units: Vec<serde_json::Value> = units
+        .iter()
+        .enumerate()
+        .map(|(order, unit)| {
+            serde_json::json!({
+                DATA_STRUCT.id: unit["id"],
+                DATA_STRUCT.type_name: unit["__typename"],
+                DATA_STRUCT.order: order + 1,
+                DATA_STRUCT.title: unit["translatedTitle"],
+                DATA_STRUCT.slug: unit["slug"],
+                DATA_STRUCT.relative_url: unit["relativeUrl"],
+                DATA_STRUCT.parent_id: parent_info["id"],
+                DATA_STRUCT.parent_type: parent_info["typeName"],
+                DATA_STRUCT.parent_title: parent_info["title"],
+                DATA_STRUCT.parent_slug: parent_info["slug"],
+                DATA_STRUCT.parent_relative_url: parent_info["relativeUrl"],
+            })
+        })
+        .collect();
 
-            Ok(extracted_units)
-        }
-        Err(e) => {
-            eprintln!("Failed to extract parent information: {}", e);
-            std::process::exit(1);
-        }
-    }
+    Ok(extracted_units)
 }
 
 fn extract_lessons_info(
