@@ -265,89 +265,31 @@ fn extract_contents_info(
     Ok(extracted_contents)
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     const JSON_FILE_CONTENT_FOR_PATH: &str = "resources/math-2nd-grade-contentForPath.json";
     const OUTPUT_CSV_FILE: &str = "resources/math-2nd-grade-information.csv";
+    const CREATE_CONTENT: bool = false;
+    const APPEND_CONTENT: bool = true;
 
-    match read_json_file(JSON_FILE_CONTENT_FOR_PATH) {
-        Ok(json_content) => {
-            match extract_course_info(&json_content) {
-                Ok(extracted_content) => {
-                    const APPEND_CONTENT: bool = false;
-                    match store_info_to_csv(&extracted_content, OUTPUT_CSV_FILE, APPEND_CONTENT) {
-                        Ok(()) => (),
-                        Err(e) => {
-                            eprintln!("Failed to store extracted content to CSV: {}", e);
-                            std::process::exit(1);
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Failed to extract content: {}", e);
-                    std::process::exit(1);
-                }
-            }
+    let json_content = read_json_file(JSON_FILE_CONTENT_FOR_PATH)?;
 
-            match extract_units_info(&json_content) {
-                Ok(extracted_units) => {
-                    for unit in extracted_units {
-                        const APPEND_CONTENT: bool = true;
-                        match store_info_to_csv(&unit, OUTPUT_CSV_FILE, APPEND_CONTENT) {
-                            Ok(()) => (),
-                            Err(e) => {
-                                eprintln!("Failed to store extracted content to CSV: {}", e);
-                                std::process::exit(1);
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Failed to extract units: {}", e);
-                    std::process::exit(1);
-                }
-            }
+    let extracted_content = extract_course_info(&json_content)?;
+    store_info_to_csv(&extracted_content, OUTPUT_CSV_FILE, CREATE_CONTENT)?;
 
-            match extract_lessons_info(&json_content) {
-                Ok(extracted_lessons) => {
-                    for lesson in extracted_lessons {
-                        const APPEND_CONTENT: bool = true;
-                        match store_info_to_csv(&lesson, OUTPUT_CSV_FILE, APPEND_CONTENT) {
-                            Ok(()) => (),
-                            Err(e) => {
-                                eprintln!("Failed to store extracted content to CSV: {}", e);
-                                std::process::exit(1);
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Failed to extract lessons: {}", e);
-                    std::process::exit(1);
-                }
-            }
-
-            match extract_contents_info(&json_content) {
-                Ok(extracted_contents) => {
-                    for content in extracted_contents {
-                        const APPEND_CONTENT: bool = true;
-                        match store_info_to_csv(&content, OUTPUT_CSV_FILE, APPEND_CONTENT) {
-                            Ok(()) => (),
-                            Err(e) => {
-                                eprintln!("Failed to store extracted content to CSV: {}", e);
-                                std::process::exit(1);
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Failed to extract content: {}", e);
-                    std::process::exit(1);
-                }
-            }
-        }
-        Err(error) => {
-            eprintln!("Failed to read JSON file: {}", error);
-            std::process::exit(1);
-        }
+    let extracted_units = extract_units_info(&json_content)?;
+    for unit in extracted_units {
+        store_info_to_csv(&unit, OUTPUT_CSV_FILE, APPEND_CONTENT)?;
     }
+
+    let extracted_lessons = extract_lessons_info(&json_content)?;
+    for lesson in extracted_lessons {
+        store_info_to_csv(&lesson, OUTPUT_CSV_FILE, APPEND_CONTENT)?;
+    }
+
+    let extracted_contents = extract_contents_info(&json_content)?;
+    for content in extracted_contents {
+        store_info_to_csv(&content, OUTPUT_CSV_FILE, APPEND_CONTENT)?;
+    }
+
+    Ok(())
 }
