@@ -1,4 +1,3 @@
-use serde_json;
 use std::io::{Read, Write};
 
 #[derive(Debug)]
@@ -38,10 +37,7 @@ fn store_info_to_csv(
     append: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let open_mode: std::io::Result<std::fs::File> = if append {
-        std::fs::OpenOptions::new()
-            .write(true)
-            .append(true)
-            .open(filename)
+        std::fs::OpenOptions::new().append(true).open(filename)
     } else {
         std::fs::File::create(filename)
     };
@@ -137,7 +133,7 @@ fn extract_units_info(
     let units: &Vec<serde_json::Value> = parsed["data"]["contentRoute"]["listedPathData"]["course"]
         ["unitChildren"]
         .as_array()
-        .ok_or_else(|| "Expected an array for unitChildren")?;
+        .ok_or("Expected an array for unitChildren")?;
 
     let parent_info = extract_course_info(json_content)
         .map_err(|e| format!("Failed to extract parent information: {}", e))?;
@@ -172,14 +168,14 @@ fn extract_lessons_info(
     let units: &Vec<serde_json::Value> = parsed["data"]["contentRoute"]["listedPathData"]["course"]
         ["unitChildren"]
         .as_array()
-        .ok_or_else(|| "Expected an array for unitChildren")?;
+        .ok_or("Expected an array for unitChildren")?;
 
     let mut extracted_lessons: Vec<serde_json::Value> = Vec::new();
 
     for unit in units {
         let lessons: &Vec<serde_json::Value> = unit["allOrderedChildren"]
             .as_array()
-            .ok_or_else(|| "Expected an array for allOrderedChildren")?;
+            .ok_or("Expected an array for allOrderedChildren")?;
 
         for (order, lesson) in lessons.iter().enumerate() {
             let extracted_lesson: serde_json::Value = serde_json::json!({
@@ -215,14 +211,14 @@ fn extract_contents_info(
     let units: &Vec<serde_json::Value> = parsed["data"]["contentRoute"]["listedPathData"]["course"]
         ["unitChildren"]
         .as_array()
-        .ok_or_else(|| "Expected an array for unitChildren")?;
+        .ok_or("Expected an array for unitChildren")?;
 
     let mut extracted_contents: Vec<serde_json::Value> = Vec::new();
 
     for unit in units {
         let lessons: &Vec<serde_json::Value> = unit["allOrderedChildren"]
             .as_array()
-            .ok_or_else(|| "Expected an array for allOrderedChildren")?;
+            .ok_or("Expected an array for allOrderedChildren")?;
 
         for lesson in lessons {
             if lesson["__typename"] != "Lesson" {
@@ -231,7 +227,7 @@ fn extract_contents_info(
 
             let contents: &Vec<serde_json::Value> = lesson["curatedChildren"]
                 .as_array()
-                .ok_or_else(|| "Expected an array for curatedChildren")?;
+                .ok_or("Expected an array for curatedChildren")?;
 
             for (order, content) in contents.iter().enumerate() {
                 let extracted_content: serde_json::Value = serde_json::json!({
