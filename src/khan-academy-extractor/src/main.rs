@@ -102,40 +102,44 @@ fn read_json_file(path: &str) -> Result<String, Box<dyn std::error::Error>> {
     let mut file: std::fs::File = std::fs::File::open(path)?;
     let mut contents: String = String::new();
     file.read_to_string(&mut contents)?;
+
     Ok(contents)
 }
 
-fn extract_course_info(json_content: &str) -> Result<serde_json::Value, serde_json::Error> {
+fn extract_course(json_content: &str) -> Result<serde_json::Value, serde_json::Error> {
     let parsed: serde_json::Value = serde_json::from_str(json_content)?;
-    let course: &serde_json::Value = &parsed["data"]["contentRoute"]["listedPathData"]["course"];
 
+    Ok(parsed["data"]["contentRoute"]["listedPathData"]["course"].clone())
+}
+
+fn extract_course_info(
+    course_content: &serde_json::Value,
+) -> Result<serde_json::Value, serde_json::Error> {
     let extracted: serde_json::Value = serde_json::json!({
-        DATA_STRUCT.id: course["id"],
-        DATA_STRUCT.type_name: course["__typename"],
+        DATA_STRUCT.id: course_content["id"],
+        DATA_STRUCT.type_name: course_content["__typename"],
         DATA_STRUCT.order: 1,
-        DATA_STRUCT.title: course["translatedTitle"],
-        DATA_STRUCT.slug: course["slug"],
-        DATA_STRUCT.relative_url: course["relativeUrl"],
-        DATA_STRUCT.parent_id: course["parent"]["id"],
-        DATA_STRUCT.parent_type: course["parent"]["__typename"],
-        DATA_STRUCT.parent_title: course["parent"]["translatedTitle"],
-        DATA_STRUCT.parent_slug: course["parent"]["slug"],
-        DATA_STRUCT.parent_relative_url: course["parent"]["relativeUrl"],
+        DATA_STRUCT.title: course_content["translatedTitle"],
+        DATA_STRUCT.slug: course_content["slug"],
+        DATA_STRUCT.relative_url: course_content["relativeUrl"],
+        DATA_STRUCT.parent_id: course_content["parent"]["id"],
+        DATA_STRUCT.parent_type: course_content["parent"]["__typename"],
+        DATA_STRUCT.parent_title: course_content["parent"]["translatedTitle"],
+        DATA_STRUCT.parent_slug: course_content["parent"]["slug"],
+        DATA_STRUCT.parent_relative_url: course_content["parent"]["relativeUrl"],
     });
 
     Ok(extracted)
 }
 
 fn extract_units_info(
-    json_content: &str,
+    course_content: &serde_json::Value,
 ) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
-    let parsed: serde_json::Value = serde_json::from_str(json_content)?;
-    let units: &Vec<serde_json::Value> = parsed["data"]["contentRoute"]["listedPathData"]["course"]
-        ["unitChildren"]
+    let units: &Vec<serde_json::Value> = course_content["unitChildren"]
         .as_array()
         .ok_or("Expected an array for unitChildren")?;
 
-    let parent_info = extract_course_info(json_content)
+    let parent_info = extract_course_info(course_content)
         .map_err(|e| format!("Failed to extract parent information: {}", e))?;
 
     let extracted_units: Vec<serde_json::Value> = units
@@ -162,11 +166,9 @@ fn extract_units_info(
 }
 
 fn extract_lessons_info(
-    json_content: &str,
+    course_content: &serde_json::Value,
 ) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
-    let parsed: serde_json::Value = serde_json::from_str(json_content)?;
-    let units: &Vec<serde_json::Value> = parsed["data"]["contentRoute"]["listedPathData"]["course"]
-        ["unitChildren"]
+    let units: &Vec<serde_json::Value> = course_content["unitChildren"]
         .as_array()
         .ok_or("Expected an array for unitChildren")?;
 
@@ -205,11 +207,9 @@ fn extract_lessons_info(
 }
 
 fn extract_contents_info(
-    json_content: &str,
+    course_content: &serde_json::Value,
 ) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
-    let parsed: serde_json::Value = serde_json::from_str(json_content)?;
-    let units: &Vec<serde_json::Value> = parsed["data"]["contentRoute"]["listedPathData"]["course"]
-        ["unitChildren"]
+    let units: &Vec<serde_json::Value> = course_content["unitChildren"]
         .as_array()
         .ok_or("Expected an array for unitChildren")?;
 
@@ -261,20 +261,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let json_content = read_json_file(JSON_FILE_CONTENT_FOR_PATH)?;
 
-    let extracted_content = extract_course_info(&json_content)?;
-    store_info_to_csv(&extracted_content, OUTPUT_CSV_FILE, CREATE_CONTENT)?;
+    let extracted_course_content = extract_course(&json_content)?;
 
-    let extracted_units = extract_units_info(&json_content)?;
+    let extracted_course = extract_course_info(&extracted_course_content)?;
+    store_info_to_csv(&extracted_course, OUTPUT_CSV_FILE, CREATE_CONTENT)?;
+
+    let extracted_units = extract_units_info(&extracted_course_content)?;
     for unit in extracted_units {
         store_info_to_csv(&unit, OUTPUT_CSV_FILE, APPEND_CONTENT)?;
     }
 
-    let extracted_lessons = extract_lessons_info(&json_content)?;
+    let extracted_lessons = extract_lessons_info(&extracted_course_content)?;
     for lesson in extracted_lessons {
         store_info_to_csv(&lesson, OUTPUT_CSV_FILE, APPEND_CONTENT)?;
     }
 
-    let extracted_contents = extract_contents_info(&json_content)?;
+    let extracted_contents = extract_contents_info(&extracted_course_content)?;
     for content in extracted_contents {
         store_info_to_csv(&content, OUTPUT_CSV_FILE, APPEND_CONTENT)?;
     }
