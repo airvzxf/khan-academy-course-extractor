@@ -39,8 +39,8 @@ enum AppError {
 fn create_csv_file<P: AsRef<std::path::Path>>(
     filename: P,
 ) -> Result<csv::Writer<std::fs::File>, AppError> {
-    let file = std::fs::File::create(filename).map_err(AppError::Io)?;
-    let writer = csv::Writer::from_writer(file);
+    let file: std::fs::File = std::fs::File::create(filename).map_err(AppError::Io)?;
+    let writer: csv::Writer<std::fs::File> = csv::Writer::from_writer(file);
 
     Ok(writer)
 }
@@ -55,9 +55,9 @@ fn append_data_to_csv(
 }
 
 fn read_json_file<P: AsRef<std::path::Path>>(path: P) -> Result<String, AppError> {
-    let file = std::fs::File::open(path).map_err(AppError::Io)?;
-    let mut reader = std::io::BufReader::new(file);
-    let mut contents = String::new();
+    let file: std::fs::File = std::fs::File::open(path).map_err(AppError::Io)?;
+    let mut reader: std::io::BufReader<std::fs::File> = std::io::BufReader::new(file);
+    let mut contents: String = String::new();
     reader.read_to_string(&mut contents)?;
 
     Ok(contents)
@@ -83,32 +83,34 @@ fn extract_course(
     course_content: &serde_json::Value,
     writer: &mut csv::Writer<std::fs::File>,
 ) -> Result<(), AppError> {
-    let course_info = extract_info(course_content, None, 1)?;
+    let course_info: DataStruct = extract_info(course_content, None, 1)?;
     append_data_to_csv(&course_info, writer)?;
 
-    let units = course_content["unitChildren"]
+    let units: &Vec<serde_json::Value> = course_content["unitChildren"]
         .as_array()
         .ok_or_else(|| AppError::MissingField("unitChildren".to_string()))?;
 
     for (unit_order, unit) in units.iter().enumerate() {
-        let unit_info = extract_info(unit, Some(&course_info), (unit_order + 1) as u32)?;
+        let unit_info: DataStruct =
+            extract_info(unit, Some(&course_info), (unit_order + 1) as u32)?;
         append_data_to_csv(&unit_info, writer)?;
 
-        let lessons = unit["allOrderedChildren"]
+        let lessons: &Vec<serde_json::Value> = unit["allOrderedChildren"]
             .as_array()
             .ok_or_else(|| AppError::MissingField("allOrderedChildren".to_string()))?;
 
         for (lesson_order, lesson) in lessons.iter().enumerate() {
-            let lesson_info = extract_info(lesson, Some(&unit_info), (lesson_order + 1) as u32)?;
+            let lesson_info: DataStruct =
+                extract_info(lesson, Some(&unit_info), (lesson_order + 1) as u32)?;
             append_data_to_csv(&lesson_info, writer)?;
 
             if lesson["__typename"] == "Lesson" {
-                let contents = lesson["curatedChildren"]
+                let contents: &Vec<serde_json::Value> = lesson["curatedChildren"]
                     .as_array()
                     .ok_or_else(|| AppError::MissingField("curatedChildren".to_string()))?;
 
                 for (content_order, content) in contents.iter().enumerate() {
-                    let content_info =
+                    let content_info: DataStruct =
                         extract_info(content, Some(&lesson_info), (content_order + 1) as u32)?;
                     append_data_to_csv(&content_info, writer)?;
                 }
@@ -159,15 +161,15 @@ fn extract_info(
 }
 
 fn main() -> Result<(), AppError> {
-    let json_file_path = std::env::var("JSON_FILE_PATH")
+    let json_file_path: String = std::env::var("JSON_FILE_PATH")
         .unwrap_or_else(|_| "resources/math-2nd-grade-contentForPath.json".to_string());
-    let output_csv_file = std::env::var("OUTPUT_CSV_FILE")
+    let output_csv_file: String = std::env::var("OUTPUT_CSV_FILE")
         .unwrap_or_else(|_| "resources/math-2nd-grade-information.csv".to_string());
 
-    let json_content = read_json_file(json_file_path)?;
-    let course_content = extract_course_content(&json_content)?;
+    let json_content: String = read_json_file(json_file_path)?;
+    let course_content: serde_json::Value = extract_course_content(&json_content)?;
 
-    let mut writer = create_csv_file(output_csv_file)?;
+    let mut writer: csv::Writer<std::fs::File> = create_csv_file(output_csv_file)?;
     extract_course(&course_content, &mut writer)?;
     writer.flush()?;
 
