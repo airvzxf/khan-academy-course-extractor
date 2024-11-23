@@ -36,25 +36,11 @@ enum AppError {
     MissingField(String),
 }
 
-fn create_csv_file_with_headers<P: AsRef<std::path::Path>>(
+fn create_csv_file<P: AsRef<std::path::Path>>(
     filename: P,
 ) -> Result<csv::Writer<std::fs::File>, AppError> {
     let file = std::fs::File::create(filename).map_err(AppError::Io)?;
-    let mut writer = csv::Writer::from_writer(file);
-    writer.write_record([
-        "id",
-        "typeName",
-        "order",
-        "title",
-        "slug",
-        "relativeUrl",
-        "progressKey",
-        "parentId",
-        "parentType",
-        "parentTitle",
-        "parentSlug",
-        "parentRelativeUrl",
-    ])?;
+    let writer = csv::Writer::from_writer(file);
 
     Ok(writer)
 }
@@ -181,7 +167,7 @@ fn main() -> Result<(), AppError> {
     let json_content = read_json_file(json_file_path)?;
     let course_content = extract_course_content(&json_content)?;
 
-    let mut writer = create_csv_file_with_headers(output_csv_file)?;
+    let mut writer = create_csv_file(output_csv_file)?;
     extract_course(&course_content, &mut writer)?;
     writer.flush()?;
 
