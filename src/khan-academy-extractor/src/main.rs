@@ -162,9 +162,9 @@ fn extract_info(
 
 fn main() -> Result<(), AppError> {
     let json_file_path: String = std::env::var("JSON_FILE_PATH")
-        .unwrap_or_else(|_| "resources/math-2nd-grade-contentForPath.json".to_string());
+        .unwrap_or_else(|_| "resources/math-3rd-grade-contentForPath.json".to_string());
     let output_csv_file: String = std::env::var("OUTPUT_CSV_FILE")
-        .unwrap_or_else(|_| "resources/math-2nd-grade-information.csv".to_string());
+        .unwrap_or_else(|_| "resources/math-3rd-grade-information.csv".to_string());
 
     let json_content: String = read_json_file(json_file_path)?;
     let course_content: serde_json::Value = extract_course_content(&json_content)?;
