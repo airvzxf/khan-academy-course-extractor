@@ -231,39 +231,37 @@ fn extract_info(
     })
 }
 
-fn extract_mastery_v2(json_content: &str) -> Result<MasteryV2, AppError> {
+fn extract_nested_value(json_content: &str, keys: &[&str]) -> Result<serde_json::Value, AppError> {
     let parsed: serde_json::Value = serde_json::from_str(json_content)?;
+    let mut current_value = parsed;
 
-    let mastery_v2 = parsed
-        .as_object()
-        .and_then(|obj| obj.get("data"))
-        .and_then(|data| data.as_object())
-        .and_then(|data_obj| data_obj.get("user"))
-        .and_then(|user| user.as_object())
-        .and_then(|user_obj| user_obj.get("courseProgress"))
-        .and_then(|course_progress| course_progress.as_object())
-        .and_then(|course_progress_obj| course_progress_obj.get("currentMasteryV2"))
-        .ok_or_else(|| AppError::MissingField("currentMasteryV2".to_string()))?;
+    for key in keys {
+        current_value = current_value
+            .as_object()
+            .and_then(|obj| obj.get(*key).cloned())
+            .ok_or_else(|| AppError::MissingField(key.to_string()))?;
+    }
+
+    Ok(current_value)
+}
+
+fn extract_mastery_v2(json_content: &str) -> Result<MasteryV2, AppError> {
+    let mastery_v2 = extract_nested_value(
+        json_content,
+        &["data", "user", "courseProgress", "currentMasteryV2"],
+    )?;
 
     serde_json::from_value(mastery_v2.clone()).map_err(AppError::Json)
 }
 
 fn extract_mastery_map(json_content: &str) -> Result<Vec<MasteryMapItem>, AppError> {
-    let parsed: serde_json::Value = serde_json::from_str(json_content)?;
-
-    let mastery_map = parsed
-        .as_object()
-        .and_then(|obj| obj.get("data"))
-        .and_then(|data| data.as_object())
-        .and_then(|data_obj| data_obj.get("user"))
-        .and_then(|user| user.as_object())
-        .and_then(|user_obj| user_obj.get("courseProgress"))
-        .and_then(|course_progress| course_progress.as_object())
-        .and_then(|course_progress_obj| course_progress_obj.get("masteryMap"))
-        .and_then(|mastery_map| mastery_map.as_array())
-        .ok_or_else(|| AppError::MissingField("masteryMap".to_string()))?;
-
+    let mastery_map = extract_nested_value(
+        json_content,
+        &["data", "user", "courseProgress", "masteryMap"],
+    )?;
     let mastery_map_items: Vec<MasteryMapItem> = mastery_map
+        .as_array()
+        .ok_or_else(|| AppError::MissingField("masteryMap".to_string()))?
         .iter()
         .map(|item| serde_json::from_value(item.clone()).map_err(AppError::Json))
         .collect::<Result<Vec<MasteryMapItem>, AppError>>()?;
@@ -272,21 +270,13 @@ fn extract_mastery_map(json_content: &str) -> Result<Vec<MasteryMapItem>, AppErr
 }
 
 fn extract_unit_progresses(json_content: &str) -> Result<Vec<UnitProgress>, AppError> {
-    let parsed: serde_json::Value = serde_json::from_str(json_content)?;
-
-    let unit_progresses = parsed
-        .as_object()
-        .and_then(|obj| obj.get("data"))
-        .and_then(|data| data.as_object())
-        .and_then(|data_obj| data_obj.get("user"))
-        .and_then(|user| user.as_object())
-        .and_then(|user_obj| user_obj.get("courseProgress"))
-        .and_then(|course_progress| course_progress.as_object())
-        .and_then(|course_progress_obj| course_progress_obj.get("unitProgresses"))
-        .and_then(|unit_progresses| unit_progresses.as_array())
-        .ok_or_else(|| AppError::MissingField("unitProgresses".to_string()))?;
-
+    let unit_progresses = extract_nested_value(
+        json_content,
+        &["data", "user", "courseProgress", "unitProgresses"],
+    )?;
     let unit_progress_items: Vec<UnitProgress> = unit_progresses
+        .as_array()
+        .ok_or_else(|| AppError::MissingField("unitProgresses".to_string()))?
         .iter()
         .map(|item| serde_json::from_value(item.clone()).map_err(AppError::Json))
         .collect::<Result<Vec<UnitProgress>, AppError>>()?;
@@ -295,16 +285,11 @@ fn extract_unit_progresses(json_content: &str) -> Result<Vec<UnitProgress>, AppE
 }
 
 fn extract_item_progresses(json_content: &str) -> Result<Vec<ContentItemProgress>, AppError> {
-    let parsed: serde_json::Value = serde_json::from_str(json_content)?;
-
-    let content_item_progresses = parsed
-        .get("data")
-        .and_then(|data| data.get("user"))
-        .and_then(|user| user.get("contentItemProgresses"))
-        .and_then(|content_item_progresses| content_item_progresses.as_array())
-        .ok_or_else(|| AppError::MissingField("contentItemProgresses".to_string()))?;
-
+    let content_item_progresses =
+        extract_nested_value(json_content, &["data", "user", "contentItemProgresses"])?;
     let content_item_progresses: Vec<ContentItemProgress> = content_item_progresses
+        .as_array()
+        .ok_or_else(|| AppError::MissingField("contentItemProgresses".to_string()))?
         .iter()
         .map(|item| serde_json::from_value(item.clone()).map_err(AppError::Json))
         .collect::<Result<Vec<ContentItemProgress>, AppError>>()?;
