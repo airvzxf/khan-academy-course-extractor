@@ -36,6 +36,15 @@ enum AppError {
     MissingField(String),
 }
 
+fn read_json_file<P: AsRef<std::path::Path>>(path: P) -> Result<String, AppError> {
+    let file: std::fs::File = std::fs::File::open(path).map_err(AppError::Io)?;
+    let mut reader: std::io::BufReader<std::fs::File> = std::io::BufReader::new(file);
+    let mut contents: String = String::new();
+    reader.read_to_string(&mut contents)?;
+
+    Ok(contents)
+}
+
 fn create_csv_file<P: AsRef<std::path::Path>>(
     filename: P,
 ) -> Result<csv::Writer<std::fs::File>, AppError> {
@@ -52,15 +61,6 @@ fn append_data_to_csv(
     writer.serialize(content)?;
 
     Ok(())
-}
-
-fn read_json_file<P: AsRef<std::path::Path>>(path: P) -> Result<String, AppError> {
-    let file: std::fs::File = std::fs::File::open(path).map_err(AppError::Io)?;
-    let mut reader: std::io::BufReader<std::fs::File> = std::io::BufReader::new(file);
-    let mut contents: String = String::new();
-    reader.read_to_string(&mut contents)?;
-
-    Ok(contents)
 }
 
 fn extract_course_content(json_content: &str) -> Result<serde_json::Value, AppError> {
