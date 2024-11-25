@@ -1,6 +1,18 @@
 use base64::Engine;
+use clap::Parser;
 use serde::de::Error;
 use std::io::Read;
+
+#[derive(clap::Parser)]
+struct Args {
+    /// Directory path
+    #[clap(short, long, default_value = ".")]
+    path: String,
+
+    /// File prefix
+    #[clap(short = 'e', long, default_value = "")]
+    prefix: String,
+}
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct DataStruct {
@@ -572,28 +584,28 @@ fn update_csv<P: AsRef<std::path::Path>>(
 }
 
 fn main() -> Result<(), AppError> {
-    let json_content_file_path: String = std::env::var("JSON_CONTENT_FILE_PATH")
-        .unwrap_or_else(|_| "resources/math-3rd-grade-contentForPath.json".to_string());
-    let json_course_progress_file_path: String = std::env::var("JSON_COURSE_PROGRESS_FILE_PATH")
-        .unwrap_or_else(|_| "resources/math-3rd-grade-courseProgressQuery.json".to_string());
-    let json_unit_progress_file_path_01: String = std::env::var("JSON_UNIT_01_FILE_PATH")
-        .unwrap_or_else(|_| {
-            "resources/math-3rd-grade-getUserInfoForTopicProgressMastery-1.json".to_string()
-        });
-    let json_unit_progress_file_path_03: String = std::env::var("JSON_UNIT_03_FILE_PATH")
-        .unwrap_or_else(|_| {
-            "resources/math-3rd-grade-getUserInfoForTopicProgressMastery-3.json".to_string()
-        });
-    let json_quiz_test_progress_file_path_01: String = std::env::var("JSON_QUIZ_01_FILE_PATH")
-        .unwrap_or_else(|_| {
-            "resources/math-3rd-grade-quizAndUnitTestAttemptsQuery-1.json".to_string()
-        });
-    let json_quiz_test_progress_file_path_03: String = std::env::var("JSON_QUIZ_03_FILE_PATH")
-        .unwrap_or_else(|_| {
-            "resources/math-3rd-grade-quizAndUnitTestAttemptsQuery-3.json".to_string()
-        });
-    let output_csv_file: String = std::env::var("OUTPUT_CSV_FILE")
-        .unwrap_or_else(|_| "resources/math-3rd-grade-information.csv".to_string());
+    let args = Args::parse();
+
+    let json_content_file_path = format!("{}/{}contentForPath.json", args.path, args.prefix);
+    let json_course_progress_file_path =
+        format!("{}/{}courseProgressQuery.json", args.path, args.prefix);
+    let json_unit_progress_file_path_01 = format!(
+        "{}/{}getUserInfoForTopicProgressMastery-1.json",
+        args.path, args.prefix
+    );
+    let json_unit_progress_file_path_03 = format!(
+        "{}/{}getUserInfoForTopicProgressMastery-3.json",
+        args.path, args.prefix
+    );
+    let json_quiz_test_progress_file_path_01 = format!(
+        "{}/{}quizAndUnitTestAttemptsQuery-1.json",
+        args.path, args.prefix
+    );
+    let json_quiz_test_progress_file_path_03 = format!(
+        "{}/{}quizAndUnitTestAttemptsQuery-3.json",
+        args.path, args.prefix
+    );
+    let output_csv_file = format!("{}/{}information.csv", args.path, args.prefix);
 
     let json_content: String = read_json_file(json_content_file_path)?;
     let course_content: serde_json::Value = extract_course_content(&json_content)?;
