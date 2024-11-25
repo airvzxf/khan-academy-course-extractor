@@ -1,2 +1,6 @@
 *.csv
 *.json
+*contentForPath*
+*courseProgressQuery*
+*getUserInfoForTopicProgressMastery*
+*quizAndUnitTestAttemptsQuery*
