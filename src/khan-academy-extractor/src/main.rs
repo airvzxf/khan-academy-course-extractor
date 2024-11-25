@@ -421,11 +421,11 @@ fn main() -> Result<(), AppError> {
         .unwrap_or_else(|_| "resources/math-3rd-grade-courseProgressQuery.json".to_string());
     let json_unit_progress_file_path_01: String = std::env::var("JSON_UNIT_01_FILE_PATH")
         .unwrap_or_else(|_| {
-            "resources/math-3rd-grade-getUserInfoForTopicProgressMastery-01.json".to_string()
+            "resources/math-3rd-grade-getUserInfoForTopicProgressMastery-1.json".to_string()
         });
     let json_unit_progress_file_path_03: String = std::env::var("JSON_UNIT_03_FILE_PATH")
         .unwrap_or_else(|_| {
-            "resources/math-3rd-grade-getUserInfoForTopicProgressMastery-03.json".to_string()
+            "resources/math-3rd-grade-getUserInfoForTopicProgressMastery-3.json".to_string()
         });
     let output_csv_file: String = std::env::var("OUTPUT_CSV_FILE")
         .unwrap_or_else(|_| "resources/math-3rd-grade-information.csv".to_string());
