@@ -1,3 +1,5 @@
+use base64::Engine;
+use serde::de::Error;
 use std::io::Read;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -12,6 +14,8 @@ struct DataStruct {
     relative_url: String,
     #[serde(rename = "progressKey")]
     progress_key: Option<String>,
+    #[serde(rename = "parentTopic")]
+    parent_topic: Option<String>,
     #[serde(rename = "parentId")]
     parent_id: Option<String>,
     #[serde(rename = "parentType")]
@@ -86,6 +90,37 @@ struct Content {
     id: String,
     #[serde(rename = "progressKey")]
     progress_key: String,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct TopicQuizAttempt {
+    #[serde(rename = "__typename")]
+    type_name: String,
+    #[serde(rename = "isCompleted")]
+    is_completed: bool,
+    #[serde(rename = "numAttempted")]
+    num_attempted: u32,
+    #[serde(rename = "numCorrect")]
+    num_correct: u32,
+    #[serde(rename = "positionKey")]
+    position_key: String,
+    #[serde(skip)]
+    parent_id: String,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct TopicUnitTestAttempt {
+    #[serde(rename = "__typename")]
+    type_name: String,
+    id: String,
+    #[serde(rename = "isCompleted")]
+    is_completed: bool,
+    #[serde(rename = "numAttempted")]
+    num_attempted: u32,
+    #[serde(rename = "numCorrect")]
+    num_correct: u32,
+    #[serde(skip)]
+    parent_id: String,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -216,6 +251,10 @@ fn extract_info(
             })?
             .to_string(),
         progress_key: item["progressKey"].as_str().map(|s| s.to_string()),
+        parent_topic: item["parentTopic"]["id"]
+            .as_str()
+            .map(|s| s.to_string())
+            .or_else(|| Some("".to_string())),
         parent_id: parent.map(|p| p.id.clone()),
         parent_type: parent.map(|p| p.type_name.clone()),
         parent_title: parent.map(|p| p.title.clone()),
@@ -297,6 +336,72 @@ fn extract_item_progresses(json_content: &str) -> Result<Vec<ContentItemProgress
     Ok(content_item_progresses)
 }
 
+fn decode_base64(position_key: &str) -> Result<String, AppError> {
+    let mut key = position_key.to_string();
+    while key.len() % 4 != 0 {
+        key.push('=');
+    }
+    let decoded_position_key = base64::engine::general_purpose::STANDARD
+        .decode(&key)
+        .map_err(|e| {
+            AppError::Json(serde_json::Error::custom(format!(
+                "Base64 decode error: {}",
+                e
+            )))
+        })?;
+    let decoded_str = String::from_utf8_lossy(&decoded_position_key).to_string();
+
+    Ok(decoded_str)
+}
+
+fn extract_quiz_attempts(json_content: &str) -> Result<Vec<TopicQuizAttempt>, AppError> {
+    let parsed: serde_json::Value = serde_json::from_str(json_content)?;
+    let quiz_attempts = parsed
+        .pointer("/data/user/latestQuizAttempts")
+        .and_then(|v| v.as_array().cloned())
+        .map(|arr| {
+            arr.into_iter()
+                .map(|item| {
+                    let mut quiz_attempt: TopicQuizAttempt =
+                        serde_json::from_value(item).map_err(AppError::Json)?;
+                    let decoded_str = decode_base64(&quiz_attempt.position_key)?;
+                    quiz_attempt.parent_id = decoded_str[decoded_str.find('\u{11}').unwrap() + 1
+                        ..decoded_str.find('\u{c}').unwrap()]
+                        .to_string();
+
+                    Ok(quiz_attempt)
+                })
+                .collect::<Result<Vec<TopicQuizAttempt>, AppError>>()
+        })
+        .unwrap_or_else(|| Ok(vec![]))?;
+
+    Ok(quiz_attempts)
+}
+
+fn extract_unit_test_attempts(json_content: &str) -> Result<Vec<TopicUnitTestAttempt>, AppError> {
+    let parsed: serde_json::Value = serde_json::from_str(json_content)?;
+    let unit_test_attempts = parsed
+        .pointer("/data/user/latestUnitTestAttempts")
+        .and_then(|v| v.as_array().cloned())
+        .map(|arr| {
+            arr.into_iter()
+                .map(|item| {
+                    let mut quiz_attempt: TopicUnitTestAttempt =
+                        serde_json::from_value(item).map_err(AppError::Json)?;
+                    let decoded_str = decode_base64(&quiz_attempt.id)?;
+                    quiz_attempt.parent_id = decoded_str
+                        [decoded_str.find(':').unwrap() + 1..decoded_str.find('\u{c}').unwrap()]
+                        .to_string();
+
+                    Ok(quiz_attempt)
+                })
+                .collect::<Result<Vec<TopicUnitTestAttempt>, AppError>>()
+        })
+        .unwrap_or_else(|| Ok(vec![]))?;
+
+    Ok(unit_test_attempts)
+}
+
 fn update_record(
     record: &mut csv::StringRecord,
     updates: &[(usize, &str)],
@@ -324,6 +429,8 @@ fn update_csv<P: AsRef<std::path::Path>>(
     mastery_map: Vec<MasteryMapItem>,
     unit_progress: Vec<UnitProgress>,
     items_progresses: Vec<Vec<ContentItemProgress>>,
+    quizzes_progresses: Vec<Vec<TopicQuizAttempt>>,
+    tests_progresses: Vec<Vec<TopicUnitTestAttempt>>,
 ) -> Result<(), AppError> {
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
@@ -334,8 +441,8 @@ fn update_csv<P: AsRef<std::path::Path>>(
         update_record(
             record,
             &[
-                (12, &mastery_v2.percentage.to_string()),
-                (13, &mastery_v2.points_earned.to_string()),
+                (13, &mastery_v2.percentage.to_string()),
+                (14, &mastery_v2.points_earned.to_string()),
             ],
         )?;
     }
@@ -345,7 +452,7 @@ fn update_csv<P: AsRef<std::path::Path>>(
             .iter_mut()
             .find(|record| record.get(6).unwrap() == mastery_map_item.progress_key)
         {
-            update_record(record, &[(14, &mastery_map_item.status)])?;
+            update_record(record, &[(15, &mastery_map_item.status)])?;
         }
     }
 
@@ -358,11 +465,11 @@ fn update_csv<P: AsRef<std::path::Path>>(
                 record,
                 &[
                     (
-                        12,
+                        13,
                         &unit_progress_item.current_mastery_v2.percentage.to_string(),
                     ),
                     (
-                        13,
+                        14,
                         &unit_progress_item
                             .current_mastery_v2
                             .points_earned
@@ -394,10 +501,60 @@ fn update_csv<P: AsRef<std::path::Path>>(
                 update_record(
                     record,
                     &[
-                        (15, &item_progress.completion_status),
-                        (16, num_attempted.as_deref().unwrap_or("")),
-                        (17, num_correct.as_deref().unwrap_or("")),
-                        (18, num_incorrect.as_deref().unwrap_or("")),
+                        (16, &item_progress.completion_status),
+                        (17, num_attempted.as_deref().unwrap_or("")),
+                        (18, num_correct.as_deref().unwrap_or("")),
+                        (19, num_incorrect.as_deref().unwrap_or("")),
+                    ],
+                )?;
+            }
+        }
+    }
+
+    for quiz_attempts in quizzes_progresses {
+        for quiz_attempt in quiz_attempts {
+            if let Some(record) = records.iter_mut().find(|record| {
+                record.get(7).unwrap() == quiz_attempt.parent_id
+                    && record.get(1).unwrap() == "TopicQuiz"
+            }) {
+                let num_incorrect = quiz_attempt.num_attempted - quiz_attempt.num_correct;
+                let completed = if quiz_attempt.is_completed {
+                    "COMPLETE"
+                } else {
+                    "UNCOMPLETED"
+                };
+                update_record(
+                    record,
+                    &[
+                        (16, completed),
+                        (17, &quiz_attempt.num_attempted.to_string()),
+                        (18, &quiz_attempt.num_correct.to_string()),
+                        (19, &num_incorrect.to_string()),
+                    ],
+                )?;
+            }
+        }
+    }
+
+    for test_attempts in tests_progresses {
+        for test_attempt in test_attempts {
+            if let Some(record) = records.iter_mut().find(|record| {
+                record.get(8).unwrap() == test_attempt.parent_id
+                    && record.get(1).unwrap() == "TopicUnitTest"
+            }) {
+                let num_incorrect = test_attempt.num_attempted - test_attempt.num_correct;
+                let completed = if test_attempt.is_completed {
+                    "COMPLETE"
+                } else {
+                    "UNCOMPLETED"
+                };
+                update_record(
+                    record,
+                    &[
+                        (16, completed),
+                        (17, &test_attempt.num_attempted.to_string()),
+                        (18, &test_attempt.num_correct.to_string()),
+                        (19, &num_incorrect.to_string()),
                     ],
                 )?;
             }
@@ -427,6 +584,14 @@ fn main() -> Result<(), AppError> {
         .unwrap_or_else(|_| {
             "resources/math-3rd-grade-getUserInfoForTopicProgressMastery-3.json".to_string()
         });
+    let json_quiz_test_progress_file_path_01: String = std::env::var("JSON_QUIZ_01_FILE_PATH")
+        .unwrap_or_else(|_| {
+            "resources/math-3rd-grade-quizAndUnitTestAttemptsQuery-1.json".to_string()
+        });
+    let json_quiz_test_progress_file_path_03: String = std::env::var("JSON_QUIZ_03_FILE_PATH")
+        .unwrap_or_else(|_| {
+            "resources/math-3rd-grade-quizAndUnitTestAttemptsQuery-3.json".to_string()
+        });
     let output_csv_file: String = std::env::var("OUTPUT_CSV_FILE")
         .unwrap_or_else(|_| "resources/math-3rd-grade-information.csv".to_string());
 
@@ -444,12 +609,22 @@ fn main() -> Result<(), AppError> {
         extract_item_progresses(&read_json_file(json_unit_progress_file_path_01)?)?,
         extract_item_progresses(&read_json_file(json_unit_progress_file_path_03)?)?,
     ];
+    let quizzes_progresses: Vec<Vec<TopicQuizAttempt>> = vec![
+        extract_quiz_attempts(&read_json_file(&json_quiz_test_progress_file_path_01)?)?,
+        extract_quiz_attempts(&read_json_file(&json_quiz_test_progress_file_path_03)?)?,
+    ];
+    let tests_progresses: Vec<Vec<TopicUnitTestAttempt>> = vec![
+        extract_unit_test_attempts(&read_json_file(json_quiz_test_progress_file_path_01)?)?,
+        extract_unit_test_attempts(&read_json_file(json_quiz_test_progress_file_path_03)?)?,
+    ];
     update_csv(
         output_csv_file,
         mastery_v2,
         mastery_map,
         unit_progress,
         items_progresses,
+        quizzes_progresses,
+        tests_progresses,
     )?;
 
     Ok(())
