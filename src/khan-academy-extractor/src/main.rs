@@ -297,6 +297,27 @@ fn extract_item_progresses(json_content: &str) -> Result<Vec<ContentItemProgress
     Ok(content_item_progresses)
 }
 
+fn update_record(
+    record: &mut csv::StringRecord,
+    updates: &[(usize, &str)],
+) -> Result<(), AppError> {
+    let mut values: Vec<&str> = vec![];
+    for i in 0..record.len() {
+        if let Some(&(_, value)) = updates.iter().find(|&&(index, _)| index == i) {
+            values.push(value);
+        } else {
+            values.push(
+                record
+                    .get(i)
+                    .ok_or_else(|| AppError::MissingField(format!("Record index {}", i)))?,
+            );
+        }
+    }
+    *record = csv::StringRecord::from(values);
+
+    Ok(())
+}
+
 fn update_csv<P: AsRef<std::path::Path>>(
     filename: P,
     mastery_v2: MasteryV2,
@@ -304,128 +325,81 @@ fn update_csv<P: AsRef<std::path::Path>>(
     unit_progress: Vec<UnitProgress>,
     items_progresses: Vec<Vec<ContentItemProgress>>,
 ) -> Result<(), AppError> {
-    // Open the CSV file
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
         .from_path(&filename)?;
     let mut records: Vec<csv::StringRecord> = reader.records().collect::<Result<_, _>>()?;
 
-    let row_index = 0;
-    let percentage = mastery_v2.percentage.to_string();
-    let points_earned = mastery_v2.points_earned.to_string();
-    if let Some(record) = records.get_mut(row_index) {
-        let mut values: Vec<&str> = vec![];
-        for i in 0..record.len() {
-            if i == 12 {
-                values.push(percentage.as_str());
-            } else if i == 13 {
-                values.push(points_earned.as_str());
-            } else {
-                values.push(
-                    record
-                        .get(i)
-                        .ok_or_else(|| AppError::MissingField(format!("Record index {}", i)))?,
-                );
-            }
-        }
-
-        let new_record = csv::StringRecord::from(values);
-        *record = new_record;
+    if let Some(record) = records.get_mut(0) {
+        update_record(
+            record,
+            &[
+                (12, &mastery_v2.percentage.to_string()),
+                (13, &mastery_v2.points_earned.to_string()),
+            ],
+        )?;
     }
 
     for mastery_map_item in mastery_map {
-        let progress_key = mastery_map_item.progress_key;
-        let status = mastery_map_item.status;
-        let row_index = records
-            .iter()
-            .position(|record| record.get(6).unwrap() == progress_key)
-            .unwrap();
-        if let Some(record) = records.get_mut(row_index) {
-            let mut values: Vec<&str> = vec![];
-            for i in 0..record.len() {
-                if i == 14 {
-                    values.push(status.as_str());
-                } else {
-                    values.push(
-                        record
-                            .get(i)
-                            .ok_or_else(|| AppError::MissingField(format!("Record index {}", i)))?,
-                    );
-                }
-            }
-
-            let new_record = csv::StringRecord::from(values);
-            *record = new_record;
+        if let Some(record) = records
+            .iter_mut()
+            .find(|record| record.get(6).unwrap() == mastery_map_item.progress_key)
+        {
+            update_record(record, &[(14, &mastery_map_item.status)])?;
         }
     }
 
     for unit_progress_item in unit_progress {
-        let unit_id = unit_progress_item.unit_id;
-        let percentage = unit_progress_item.current_mastery_v2.percentage.to_string();
-        let points_earned = unit_progress_item
-            .current_mastery_v2
-            .points_earned
-            .to_string();
-        let row_index = records
-            .iter()
-            .position(|record| record.get(0).unwrap() == unit_id)
-            .unwrap();
-        if let Some(record) = records.get_mut(row_index) {
-            let mut values: Vec<&str> = vec![];
-            for i in 0..record.len() {
-                if i == 12 {
-                    values.push(percentage.as_str());
-                } else if i == 13 {
-                    values.push(points_earned.as_str());
-                } else {
-                    values.push(
-                        record
-                            .get(i)
-                            .ok_or_else(|| AppError::MissingField(format!("Record index {}", i)))?,
-                    );
-                }
-            }
-
-            let new_record = csv::StringRecord::from(values);
-            *record = new_record;
+        if let Some(record) = records
+            .iter_mut()
+            .find(|record| record.get(0).unwrap() == unit_progress_item.unit_id)
+        {
+            update_record(
+                record,
+                &[
+                    (
+                        12,
+                        &unit_progress_item.current_mastery_v2.percentage.to_string(),
+                    ),
+                    (
+                        13,
+                        &unit_progress_item
+                            .current_mastery_v2
+                            .points_earned
+                            .to_string(),
+                    ),
+                ],
+            )?;
         }
     }
 
     for item_progresses in items_progresses {
         for item_progress in item_progresses {
-            let progress_key = item_progress.content.progress_key;
-            let completion_status = item_progress.completion_status;
-            let best_score = item_progress.best_score;
-            let num_attempted = best_score.as_ref().and_then(|bs| bs.num_attempted);
-            let num_correct = best_score.as_ref().and_then(|bs| bs.num_correct);
-            let num_incorrect = num_attempted.and_then(|na| num_correct.map(|nc| na - nc));
-            let num_attempted = num_attempted.map(|v| v.to_string());
-            let num_correct = num_correct.map(|v| v.to_string());
-            let num_incorrect = num_incorrect.map(|v| v.to_string());
-            let row_index = records
-                .iter()
-                .position(|record| record.get(6).unwrap() == progress_key)
-                .unwrap();
-            if let Some(record) = records.get_mut(row_index) {
-                let mut values: Vec<&str> = vec![];
-                for i in 0..record.len() {
-                    if i == 15 {
-                        values.push(completion_status.as_str());
-                    } else if i == 16 {
-                        values.push(num_attempted.as_deref().unwrap_or(""));
-                    } else if i == 17 {
-                        values.push(num_correct.as_deref().unwrap_or(""));
-                    } else if i == 18 {
-                        values.push(num_incorrect.as_deref().unwrap_or(""));
-                    } else {
-                        values.push(record.get(i).ok_or_else(|| {
-                            AppError::MissingField(format!("Record index {}", i))
-                        })?);
-                    }
-                }
-
-                let new_record = csv::StringRecord::from(values);
-                *record = new_record;
+            if let Some(record) = records
+                .iter_mut()
+                .find(|record| record.get(6).unwrap() == item_progress.content.progress_key)
+            {
+                let best_score = item_progress.best_score.as_ref();
+                let num_attempted = best_score
+                    .and_then(|bs| bs.num_attempted)
+                    .map(|v| v.to_string());
+                let num_correct = best_score
+                    .and_then(|bs| bs.num_correct)
+                    .map(|v| v.to_string());
+                let num_incorrect = num_attempted.as_ref().and_then(|na| {
+                    num_correct.as_ref().map(|nc| {
+                        (na.parse::<u32>().unwrap() - nc.parse::<u32>().unwrap()).to_string()
+                    })
+                });
+                update_record(
+                    record,
+                    &[
+                        (15, &item_progress.completion_status),
+                        (16, num_attempted.as_deref().unwrap_or("")),
+                        (17, num_correct.as_deref().unwrap_or("")),
+                        (18, num_incorrect.as_deref().unwrap_or("")),
+                    ],
+                )?;
             }
         }
     }
