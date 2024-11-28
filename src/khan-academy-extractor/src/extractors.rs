@@ -1,6 +1,6 @@
 use crate::error::AppError;
 use crate::json_utils::extract_nested_value;
-use crate::{
+use crate::models::{
     ContentItemProgress, DataStruct, MasteryMapItem, MasteryV2, TopicQuizAttempt,
     TopicUnitTestAttempt, UnitProgress,
 };

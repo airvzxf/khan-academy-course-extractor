@@ -1,5 +1,5 @@
 use crate::error::AppError;
-use crate::DataStruct;
+use crate::models::DataStruct;
 use csv::Writer;
 use std::fs::File;
 use std::path::Path;
