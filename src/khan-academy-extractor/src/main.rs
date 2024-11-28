@@ -149,15 +149,16 @@ enum AppError {
     MissingFile(String),
 }
 
-/// Reads the content of a JSON file and returns it as a string.
+/// Reads the contents of a JSON file from the specified path and returns it as a `String`.
 ///
-/// # Arguments
+/// # Parameters
 ///
-/// * `path` - A reference to the path of the JSON file.
+/// - `path`: A path to the JSON file. It can be any type that implements the `AsRef<std::path::Path>` trait.
 ///
-/// # Errors
+/// # Returns
 ///
-/// Returns an `AppError` if there is an I/O error or if the file cannot be read.
+/// - `Result<String, AppError>`: On success, returns the contents of the file as a `String`.
+///   On failure, returns an `AppError` indicating the type of error that occurred, such as an I/O error.
 fn read_json_file<P: AsRef<std::path::Path>>(path: P) -> Result<String, AppError> {
     let file: std::fs::File = std::fs::File::open(path).map_err(AppError::Io)?;
     let mut reader: std::io::BufReader<std::fs::File> = std::io::BufReader::new(file);
@@ -169,13 +170,14 @@ fn read_json_file<P: AsRef<std::path::Path>>(path: P) -> Result<String, AppError
 
 /// Creates a new CSV file and returns a CSV writer for it.
 ///
-/// # Arguments
+/// # Parameters
 ///
-/// * `filename` - A reference to the path of the CSV file to be created.
+/// - `filename`: A path to the file to be created. It can be any type that implements the `AsRef<std::path::Path>` trait.
 ///
-/// # Errors
+/// # Returns
 ///
-/// Returns an `AppError` if there is an I/O error or if the file cannot be created.
+/// - `Result<csv::Writer<std::fs::File>, AppError>`: On success, returns a CSV writer that can be used to write to the file.
+///   On failure, returns an `AppError` indicating the type of error that occurred, such as an I/O error.
 fn create_csv_file<P: AsRef<std::path::Path>>(
     filename: P,
 ) -> Result<csv::Writer<std::fs::File>, AppError> {
@@ -185,16 +187,16 @@ fn create_csv_file<P: AsRef<std::path::Path>>(
     Ok(writer)
 }
 
-/// Appends data to an existing CSV file.
+/// Appends a `DataStruct` instance to a CSV file using the provided CSV writer.
 ///
-/// # Arguments
+/// # Parameters
 ///
-/// * `content` - A reference to the data to be appended.
-/// * `writer` - A mutable reference to the CSV writer.
+/// - `content`: A reference to the `DataStruct` instance that contains the data to be serialized and written to the CSV file.
+/// - `writer`: A mutable reference to a `csv::Writer` that is used to write the serialized data to the CSV file.
 ///
-/// # Errors
+/// # Returns
 ///
-/// Returns an `AppError` if there is an error serializing the data.
+/// - `Result<(), AppError>`: On success, returns `Ok(())`. On failure, returns an `AppError` indicating the type of error that occurred, such as a CSV serialization error.
 fn append_data_to_csv(
     content: &DataStruct,
     writer: &mut csv::Writer<std::fs::File>,
@@ -206,13 +208,20 @@ fn append_data_to_csv(
 
 /// Extracts the course content from a JSON string.
 ///
-/// # Arguments
+/// This function parses the provided JSON string and navigates through its structure
+/// to extract the course content. It expects the JSON to have a specific structure
+/// with nested objects, and it retrieves the "course" field from within these nested objects.
 ///
-/// * `json_content` - A reference to the JSON string.
+/// # Parameters
 ///
-/// # Errors
+/// - `json_content`: A string slice that holds the JSON content to be parsed and from which
+///   the course content will be extracted.
 ///
-/// Returns an `AppError` if there is an error parsing the JSON or if the required field is missing.
+/// # Returns
+///
+/// - `Result<serde_json::Value, AppError>`: On success, returns the extracted course content
+///   as a `serde_json::Value`. On failure, returns an `AppError` indicating the type of error
+///   that occurred, such as a missing field error if the expected structure is not found.
 fn extract_course_content(json_content: &str) -> Result<serde_json::Value, AppError> {
     let parsed: serde_json::Value = serde_json::from_str(json_content)?;
 
@@ -229,16 +238,25 @@ fn extract_course_content(json_content: &str) -> Result<serde_json::Value, AppEr
         .ok_or_else(|| AppError::MissingField("course".to_string()))
 }
 
-/// Extracts course information and writes it to a CSV file.
+/// Extracts course information from a JSON value and writes it to a CSV file.
 ///
-/// # Arguments
+/// This function navigates through the JSON structure representing a course,
+/// extracting relevant information about the course, its units, lessons, and contents.
+/// The extracted information is serialized and appended to a CSV file using the provided writer.
 ///
-/// * `course_content` - A reference to the course content JSON value.
-/// * `writer` - A mutable reference to the CSV writer.
+/// # Parameters
 ///
-/// # Errors
+/// - `course_content`: A reference to a `serde_json::Value` that contains the JSON structure
+///   of the course. This JSON value is expected to have a specific structure with nested objects
+///   representing units, lessons, and contents.
+/// - `writer`: A mutable reference to a `csv::Writer<std::fs::File>` that is used to write
+///   the serialized course information to a CSV file.
 ///
-/// Returns an `AppError` if there is an error extracting information or writing to the CSV file.
+/// # Returns
+///
+/// - `Result<(), AppError>`: On success, returns `Ok(())`. On failure, returns an `AppError`
+///   indicating the type of error that occurred, such as a missing field error if the expected
+///   structure is not found.
 fn extract_course(
     course_content: &serde_json::Value,
     writer: &mut csv::Writer<std::fs::File>,
@@ -281,17 +299,29 @@ fn extract_course(
     Ok(())
 }
 
-/// Extracts information from a JSON value and returns it as a `DataStruct`.
+/// Extracts information from a JSON value and constructs a `DataStruct` instance.
 ///
-/// # Arguments
+/// This function parses a JSON object to extract specific fields and constructs a `DataStruct`
+/// with the extracted data. It also incorporates information from a parent `DataStruct` if provided.
 ///
-/// * `item` - A reference to the JSON value.
-/// * `parent` - An optional reference to the parent `DataStruct`.
-/// * `order` - The order of the item.
+/// # Parameters
 ///
-/// # Errors
+/// - `item`: A reference to a `serde_json::Value` representing the JSON object from which
+///   information is to be extracted. The JSON object is expected to contain specific fields
+///   such as "id", "__typename", "translatedTitle", "slug", and "relativeUrl".
 ///
-/// Returns an `AppError` if there is an error extracting required fields.
+/// - `parent`: An optional reference to a `DataStruct` that represents the parent of the current
+///   item. If provided, certain fields from the parent will be included in the constructed
+///   `DataStruct`.
+///
+/// - `order`: A `u32` representing the order of the item within its parent context. This is used
+///   to set the `order` field in the constructed `DataStruct`.
+///
+/// # Returns
+///
+/// - `Result<DataStruct, AppError>`: On success, returns a `DataStruct` populated with the extracted
+///   information. On failure, returns an `AppError` indicating the type of error that occurred,
+///   such as a missing field error if the expected structure is not found.
 fn extract_info(
     item: &serde_json::Value,
     parent: Option<&DataStruct>,
@@ -344,14 +374,24 @@ fn extract_info(
 
 /// Extracts a nested value from a JSON string based on a sequence of keys.
 ///
-/// # Arguments
+/// This function parses a JSON string and navigates through its structure
+/// using the provided sequence of keys to extract a specific nested value.
 ///
-/// * `json_content` - A reference to the JSON string.
-/// * `keys` - A slice of keys to navigate through the JSON structure.
+/// # Parameters
 ///
-/// # Errors
+/// - `json_content`: A string slice containing the JSON content to be parsed.
+///   The JSON is expected to be a valid JSON object.
 ///
-/// Returns an `AppError` if there is an error parsing the JSON or if the required field is missing.
+/// - `keys`: A slice of string slices representing the sequence of keys to
+///   navigate through the JSON structure. Each key corresponds to a level
+///   in the JSON hierarchy.
+///
+/// # Returns
+///
+/// - `Result<serde_json::Value, AppError>`: On success, returns the extracted
+///   nested value as a `serde_json::Value`. On failure, returns an `AppError`
+///   indicating the type of error that occurred, such as a missing field error
+///   if any of the keys are not found in the JSON structure.
 fn extract_nested_value(json_content: &str, keys: &[&str]) -> Result<serde_json::Value, AppError> {
     let parsed: serde_json::Value = serde_json::from_str(json_content)?;
     let mut current_value = parsed;
@@ -366,15 +406,23 @@ fn extract_nested_value(json_content: &str, keys: &[&str]) -> Result<serde_json:
     Ok(current_value)
 }
 
-/// Extracts the mastery information from a JSON string.
+/// Extracts the current mastery level from a JSON string.
 ///
-/// # Arguments
+/// This function parses the provided JSON content to extract the "currentMasteryV2" field,
+/// which represents the user's current mastery level in a course. The JSON is expected to
+/// have a specific structure with nested objects.
 ///
-/// * `json_content` - A reference to the JSON string.
+/// # Parameters
 ///
-/// # Errors
+/// - `json_content`: A string slice containing the JSON content to be parsed. The JSON is
+///   expected to be a valid JSON object with a specific structure.
 ///
-/// Returns an `AppError` if there is an error parsing the JSON or if the required field is missing.
+/// # Returns
+///
+/// - `Result<MasteryV2, AppError>`: On success, returns a `MasteryV2` struct containing the
+///   extracted mastery level information. On failure, returns an `AppError` indicating the
+///   type of error that occurred, such as a missing field error if the expected structure
+///   is not found.
 fn extract_mastery_v2(json_content: &str) -> Result<MasteryV2, AppError> {
     let mastery_v2 = extract_nested_value(
         json_content,
@@ -386,13 +434,21 @@ fn extract_mastery_v2(json_content: &str) -> Result<MasteryV2, AppError> {
 
 /// Extracts the mastery map from a JSON string.
 ///
-/// # Arguments
+/// This function parses the provided JSON content to extract the "masteryMap" field,
+/// which represents a list of mastery map items. The JSON is expected to have a specific
+/// structure with nested objects.
 ///
-/// * `json_content` - A reference to the JSON string.
+/// # Parameters
 ///
-/// # Errors
+/// - `json_content`: A string slice containing the JSON content to be parsed. The JSON is
+///   expected to be a valid JSON object with a specific structure.
 ///
-/// Returns an `AppError` if there is an error parsing the JSON or if the required field is missing.
+/// # Returns
+///
+/// - `Result<Vec<MasteryMapItem>, AppError>`: On success, returns a vector of `MasteryMapItem`
+///   structs containing the extracted mastery map information. On failure, returns an `AppError`
+///   indicating the type of error that occurred, such as a missing field error if the expected
+///   structure is not found.
 fn extract_mastery_map(json_content: &str) -> Result<Vec<MasteryMapItem>, AppError> {
     let mastery_map = extract_nested_value(
         json_content,
@@ -408,15 +464,23 @@ fn extract_mastery_map(json_content: &str) -> Result<Vec<MasteryMapItem>, AppErr
     Ok(mastery_map_items)
 }
 
-/// Extracts the unit progress information from a JSON string.
+/// Extracts unit progress information from a JSON string.
 ///
-/// # Arguments
+/// This function parses the provided JSON content to extract the "unitProgresses" field,
+/// which represents a list of unit progress items. The JSON is expected to have a specific
+/// structure with nested objects.
 ///
-/// * `json_content` - A reference to the JSON string.
+/// # Parameters
 ///
-/// # Errors
+/// - `json_content`: A string slice containing the JSON content to be parsed. The JSON is
+///   expected to be a valid JSON object with a specific structure.
 ///
-/// Returns an `AppError` if there is an error parsing the JSON or if the required field is missing.
+/// # Returns
+///
+/// - `Result<Vec<UnitProgress>, AppError>`: On success, returns a vector of `UnitProgress`
+///   structs containing the extracted unit progress information. On failure, returns an `AppError`
+///   indicating the type of error that occurred, such as a missing field error if the expected
+///   structure is not found.
 fn extract_unit_progresses(json_content: &str) -> Result<Vec<UnitProgress>, AppError> {
     let unit_progresses = extract_nested_value(
         json_content,
@@ -432,15 +496,23 @@ fn extract_unit_progresses(json_content: &str) -> Result<Vec<UnitProgress>, AppE
     Ok(unit_progress_items)
 }
 
-/// Extracts the content item progress information from a JSON string.
+/// Extracts the progress of content items from a JSON string.
 ///
-/// # Arguments
+/// This function parses the provided JSON content to extract the "contentItemProgresses" field,
+/// which represents a list of content item progress records. The JSON is expected to have a specific
+/// structure with nested objects.
 ///
-/// * `json_content` - A reference to the JSON string.
+/// # Parameters
 ///
-/// # Errors
+/// - `json_content`: A string slice containing the JSON content to be parsed. The JSON is
+///   expected to be a valid JSON object with a specific structure.
 ///
-/// Returns an `AppError` if there is an error parsing the JSON or if the required field is missing.
+/// # Returns
+///
+/// - `Result<Vec<ContentItemProgress>, AppError>`: On success, returns a vector of `ContentItemProgress`
+///   structs containing the extracted content item progress information. On failure, returns an `AppError`
+///   indicating the type of error that occurred, such as a missing field error if the expected
+///   structure is not found.
 fn extract_item_progresses(json_content: &str) -> Result<Vec<ContentItemProgress>, AppError> {
     let content_item_progresses =
         extract_nested_value(json_content, &["data", "user", "contentItemProgresses"])?;
@@ -454,15 +526,20 @@ fn extract_item_progresses(json_content: &str) -> Result<Vec<ContentItemProgress
     Ok(content_item_progresses)
 }
 
-/// Decodes a base64-encoded string.
+/// Decodes a Base64-encoded string into a UTF-8 string.
 ///
-/// # Arguments
+/// This function takes a Base64-encoded string, ensures it is properly padded,
+/// decodes it, and converts the resulting bytes into a UTF-8 string.
 ///
-/// * `position_key` - A reference to the base64-encoded string.
+/// # Parameters
 ///
-/// # Errors
+/// - `position_key`: A string slice containing the Base64-encoded data that needs to be decoded.
 ///
-/// Returns an `AppError` if there is an error decoding the base64 string.
+/// # Returns
+///
+/// - `Result<String, AppError>`: On success, returns the decoded string as a `String`.
+///   On failure, returns an `AppError` indicating the type of error that occurred,
+///   such as a Base64 decoding error.
 fn decode_base64(position_key: &str) -> Result<String, AppError> {
     let mut key = position_key.to_string();
     while key.len() % 4 != 0 {
@@ -483,13 +560,20 @@ fn decode_base64(position_key: &str) -> Result<String, AppError> {
 
 /// Extracts quiz attempts from a JSON string.
 ///
-/// # Arguments
+/// This function parses the provided JSON content to extract the "latestQuizAttempts" field,
+/// which represents a list of quiz attempt records. It decodes the `position_key` for each
+/// quiz attempt to determine the `parent_id`.
 ///
-/// * `json_content` - A reference to the JSON string.
+/// # Parameters
 ///
-/// # Errors
+/// - `json_content`: A string slice containing the JSON content to be parsed. The JSON is
+///   expected to be a valid JSON object with a specific structure.
 ///
-/// Returns an `AppError` if there is an error parsing the JSON or if the required field is missing.
+/// # Returns
+///
+/// - `Result<Vec<TopicQuizAttempt>, AppError>`: On success, returns a vector of `TopicQuizAttempt`
+///   structs containing the extracted quiz attempt information. On failure, returns an `AppError`
+///   indicating the type of error that occurred, such as a JSON parsing error or a Base64 decoding error.
 fn extract_quiz_attempts(json_content: &str) -> Result<Vec<TopicQuizAttempt>, AppError> {
     let parsed: serde_json::Value = serde_json::from_str(json_content)?;
     let quiz_attempts = parsed
@@ -516,13 +600,20 @@ fn extract_quiz_attempts(json_content: &str) -> Result<Vec<TopicQuizAttempt>, Ap
 
 /// Extracts unit test attempts from a JSON string.
 ///
-/// # Arguments
+/// This function parses the provided JSON content to extract the "latestUnitTestAttempts" field,
+/// which represents a list of unit test attempt records. It decodes the `id` for each
+/// unit test attempt to determine the `parent_id`.
 ///
-/// * `json_content` - A reference to the JSON string.
+/// # Parameters
 ///
-/// # Errors
+/// - `json_content`: A string slice containing the JSON content to be parsed. The JSON is
+///   expected to be a valid JSON object with a specific structure.
 ///
-/// Returns an `AppError` if there is an error parsing the JSON or if the required field is missing.
+/// # Returns
+///
+/// - `Result<Vec<TopicUnitTestAttempt>, AppError>`: On success, returns a vector of `TopicUnitTestAttempt`
+///   structs containing the extracted unit test attempt information. On failure, returns an `AppError`
+///   indicating the type of error that occurred, such as a JSON parsing error or a Base64 decoding error.
 fn extract_unit_test_attempts(json_content: &str) -> Result<Vec<TopicUnitTestAttempt>, AppError> {
     let parsed: serde_json::Value = serde_json::from_str(json_content)?;
     let unit_test_attempts = parsed
@@ -547,16 +638,26 @@ fn extract_unit_test_attempts(json_content: &str) -> Result<Vec<TopicUnitTestAtt
     Ok(unit_test_attempts)
 }
 
-/// Updates a CSV record with new values.
+/// Updates a CSV record with new values at specified indices.
 ///
-/// # Arguments
+/// This function takes a mutable reference to a CSV record and a list of updates,
+/// where each update specifies an index and a new value. The function updates the
+/// record in place, replacing the values at the specified indices with the new values.
 ///
-/// * `record` - A mutable reference to the CSV record.
-/// * `updates` - A slice of tuples containing the index and new value.
+/// # Parameters
 ///
-/// # Errors
+/// - `record`: A mutable reference to a `csv::StringRecord` that represents the CSV record
+///   to be updated. The record is modified in place with the new values provided in `updates`.
 ///
-/// Returns an `AppError` if there is an error updating the record.
+/// - `updates`: A slice of tuples, where each tuple contains an `usize` index and a `&str` value.
+///   The index specifies the position in the record to be updated, and the value is the new value
+///   to be set at that position.
+///
+/// # Returns
+///
+/// - `Result<(), AppError>`: On success, returns `Ok(())`. On failure, returns an `AppError`
+///   indicating the type of error that occurred, such as a missing field error if an index
+///   specified in `updates` is out of bounds for the record.
 fn update_record(
     record: &mut csv::StringRecord,
     updates: &[(usize, &str)],
@@ -578,21 +679,42 @@ fn update_record(
     Ok(())
 }
 
-/// Updates a CSV file with new progress data.
+/// Updates a CSV file with the provided progress data.
 ///
-/// # Arguments
+/// This function reads an existing CSV file, updates its records with the provided
+/// mastery, unit, item, quiz, and test progress data, and writes the updated records
+/// back to the file.
 ///
-/// * `filename` - A reference to the path of the CSV file.
-/// * `mastery_v2` - The mastery information.
-/// * `mastery_map` - A vector of mastery map items.
-/// * `unit_progress` - A vector of unit progress items.
-/// * `items_progresses` - A vector of vectors of content item progress items.
-/// * `quizzes_progresses` - A vector of vectors of quiz attempt items.
-/// * `tests_progresses` - A vector of vectors of unit test attempt items.
+/// # Parameters
 ///
-/// # Errors
+/// - `filename`: A path to the CSV file to be updated. It can be any type that implements
+///   the `AsRef<std::path::Path>` trait.
 ///
-/// Returns an `AppError` if there is an error updating the CSV file.
+/// - `mastery_v2`: A `MasteryV2` struct containing the overall mastery percentage and points
+///   earned to be updated in the CSV.
+///
+/// - `mastery_map`: A vector of `MasteryMapItem` structs representing the mastery map items
+///   to be updated in the CSV. Each item contains a progress key and status.
+///
+/// - `unit_progress`: A vector of `UnitProgress` structs representing the progress of units
+///   to be updated in the CSV. Each item contains a unit ID and current mastery information.
+///
+/// - `items_progresses`: A vector of vectors of `ContentItemProgress` structs representing
+///   the progress of content items to be updated in the CSV. Each item contains progress
+///   information such as completion status and scores.
+///
+/// - `quizzes_progresses`: A vector of vectors of `TopicQuizAttempt` structs representing
+///   the progress of quiz attempts to be updated in the CSV. Each item contains attempt
+///   information such as completion status and scores.
+///
+/// - `tests_progresses`: A vector of vectors of `TopicUnitTestAttempt` structs representing
+///   the progress of test attempts to be updated in the CSV. Each item contains attempt
+///   information such as completion status and scores.
+///
+/// # Returns
+///
+/// - `Result<(), AppError>`: On success, returns `Ok(())`. On failure, returns an `AppError`
+///   indicating the type of error that occurred, such as an I/O error or CSV serialization error.
 fn update_csv<P: AsRef<std::path::Path>>(
     filename: P,
     mastery_v2: MasteryV2,
@@ -743,13 +865,20 @@ fn update_csv<P: AsRef<std::path::Path>>(
 
 /// Lists all files in the specified directory.
 ///
-/// # Arguments
+/// This function reads the contents of a directory and collects the names of all files
+/// present in that directory into a vector of strings. It does not include directories
+/// or other non-file entries.
 ///
-/// * `path` - A reference to the path of the directory.
+/// # Parameters
 ///
-/// # Errors
+/// - `path`: A path to the directory to be read. It can be any type that implements the
+///   `AsRef<std::path::Path>` trait, allowing for flexible input types such as `&str` or `PathBuf`.
 ///
-/// Returns an `AppError` if there is an I/O error or if the directory cannot be read.
+/// # Returns
+///
+/// - `Result<Vec<String>, AppError>`: On success, returns a vector of strings, each representing
+///   the name of a file in the specified directory. On failure, returns an `AppError` indicating
+///   the type of error that occurred, such as an I/O error if the directory cannot be read.
 fn list_files_in_directory<P: AsRef<std::path::Path>>(path: P) -> Result<Vec<String>, AppError> {
     let mut file_list = Vec::new();
     for entry in std::fs::read_dir(path)? {
@@ -766,18 +895,31 @@ fn list_files_in_directory<P: AsRef<std::path::Path>>(path: P) -> Result<Vec<Str
     Ok(file_list)
 }
 
-/// Finds and reads a JSON file with the specified prefix and suffix.
+/// Searches for a JSON file in a list of files, constructs its path, and reads its contents.
 ///
-/// # Arguments
+/// This function attempts to find a JSON file in the provided list of file names that matches
+/// the specified prefix and suffix. If found, it constructs the full path to the file and reads
+/// its contents as a string.
 ///
-/// * `files` - A slice of file names.
-/// * `path` - The directory path.
-/// * `prefix` - The file prefix.
-/// * `suffix` - The file suffix.
+/// # Parameters
 ///
-/// # Errors
+/// - `files`: A slice of `String` representing the list of file names to search through.
+///   Each file name is expected to be a string without a path.
 ///
-/// Returns an `AppError` if the file is not found or if there is an error reading the file.
+/// - `path`: A string slice representing the directory path where the files are located.
+///   This path is prepended to the file name to construct the full file path.
+///
+/// - `prefix`: A string slice representing the prefix to be used when searching for the file.
+///   The prefix is combined with the suffix to form the expected file name.
+///
+/// - `suffix`: A string slice representing the suffix to be used when searching for the file.
+///   The suffix is combined with the prefix to form the expected file name.
+///
+/// # Returns
+///
+/// - `Result<String, AppError>`: On success, returns the contents of the found JSON file as a `String`.
+///   On failure, returns an `AppError` indicating the type of error that occurred, such as a missing file error
+///   if the file is not found in the list.
 fn find_and_read_json_file(
     files: &[String],
     path: &str,
@@ -793,18 +935,33 @@ fn find_and_read_json_file(
     read_json_file(file_path)
 }
 
-/// Finds and reads multiple JSON files with the specified prefix and suffix.
+/// Finds and reads JSON files from a list of file names, filtering by a specified prefix and suffix.
 ///
-/// # Arguments
+/// This function filters the provided list of file names to find those that match the specified
+/// prefix and suffix, and then reads the contents of these files. The files are expected to be
+/// located in the specified directory path.
 ///
-/// * `files` - A slice of file names.
-/// * `path` - The directory path.
-/// * `prefix` - The file prefix.
-/// * `suffix` - The file suffix.
+/// # Parameters
 ///
-/// # Errors
+/// - `files`: A slice of `String` containing the names of the files to be searched. Each file name
+///   is checked against the specified prefix and suffix to determine if it should be read.
 ///
-/// Returns an `AppError` if there is an error reading any of the files.
+/// - `path`: A string slice representing the directory path where the files are located. This path
+///   is prepended to each file name to construct the full path to the file.
+///
+/// - `prefix`: A string slice representing the prefix that each file name must start with to be
+///   considered for reading. This prefix is combined with the suffix to form the complete filter
+///   criteria.
+///
+/// - `suffix`: A string slice representing the suffix that each file name must end with to be
+///   considered for reading. This suffix is combined with the prefix to form the complete filter
+///   criteria.
+///
+/// # Returns
+///
+/// - `Result<Vec<String>, AppError>`: On success, returns a vector of strings, each containing the
+///   contents of a JSON file that matched the specified criteria. On failure, returns an `AppError`
+///   indicating the type of error that occurred, such as an I/O error when reading a file.
 fn find_and_read_json_files(
     files: &[String],
     path: &str,
@@ -833,11 +990,13 @@ fn find_and_read_json_files(
         .collect::<Result<Vec<String>, AppError>>()
 }
 
-/// The main function that orchestrates the extraction and updating of course data.
+/// The main function serves as the entry point for the application, orchestrating the process
+/// of reading JSON files, extracting course and progress data, and writing the results to a CSV file.
 ///
-/// # Errors
+/// # Returns
 ///
-/// Returns an `AppError` if there is an error during any of the operations.
+/// - `Result<(), AppError>`: On success, returns `Ok(())`. On failure, returns an `AppError`
+///   indicating the type of error that occurred during the execution of the function.
 fn main() -> Result<(), AppError> {
     let args = Args::parse();
     let files = list_files_in_directory(&args.path)?;
