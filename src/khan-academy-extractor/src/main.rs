@@ -1,3 +1,5 @@
+mod error;
+
 use base64::Engine;
 use clap::Parser;
 use serde::de::Error;
@@ -135,20 +137,6 @@ struct TopicUnitTestAttempt {
     parent_id: String,
 }
 
-#[derive(thiserror::Error, Debug)]
-enum AppError {
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
-    #[error("JSON error: {0}")]
-    Json(#[from] serde_json::Error),
-    #[error("CSV error: {0}")]
-    Csv(#[from] csv::Error),
-    #[error("Missing field: {0}")]
-    MissingField(String),
-    #[error("Missing file: {0}")]
-    MissingFile(String),
-}
-
 /// Reads the contents of a JSON file from the specified path and returns it as a `String`.
 ///
 /// # Parameters
@@ -159,8 +147,8 @@ enum AppError {
 ///
 /// - `Result<String, AppError>`: On success, returns the contents of the file as a `String`.
 ///   On failure, returns an `AppError` indicating the type of error that occurred, such as an I/O error.
-fn read_json_file<P: AsRef<std::path::Path>>(path: P) -> Result<String, AppError> {
-    let file: std::fs::File = std::fs::File::open(path).map_err(AppError::Io)?;
+fn read_json_file<P: AsRef<std::path::Path>>(path: P) -> Result<String, error::AppError> {
+    let file: std::fs::File = std::fs::File::open(path).map_err(error::AppError::Io)?;
     let mut reader: std::io::BufReader<std::fs::File> = std::io::BufReader::new(file);
     let mut contents: String = String::new();
     reader.read_to_string(&mut contents)?;
@@ -180,8 +168,8 @@ fn read_json_file<P: AsRef<std::path::Path>>(path: P) -> Result<String, AppError
 ///   On failure, returns an `AppError` indicating the type of error that occurred, such as an I/O error.
 fn create_csv_file<P: AsRef<std::path::Path>>(
     filename: P,
-) -> Result<csv::Writer<std::fs::File>, AppError> {
-    let file: std::fs::File = std::fs::File::create(filename).map_err(AppError::Io)?;
+) -> Result<csv::Writer<std::fs::File>, error::AppError> {
+    let file: std::fs::File = std::fs::File::create(filename).map_err(error::AppError::Io)?;
     let writer: csv::Writer<std::fs::File> = csv::Writer::from_writer(file);
 
     Ok(writer)
@@ -200,7 +188,7 @@ fn create_csv_file<P: AsRef<std::path::Path>>(
 fn append_data_to_csv(
     content: &DataStruct,
     writer: &mut csv::Writer<std::fs::File>,
-) -> Result<(), AppError> {
+) -> Result<(), error::AppError> {
     writer.serialize(content)?;
 
     Ok(())
@@ -222,7 +210,7 @@ fn append_data_to_csv(
 /// - `Result<serde_json::Value, AppError>`: On success, returns the extracted course content
 ///   as a `serde_json::Value`. On failure, returns an `AppError` indicating the type of error
 ///   that occurred, such as a missing field error if the expected structure is not found.
-fn extract_course_content(json_content: &str) -> Result<serde_json::Value, AppError> {
+fn extract_course_content(json_content: &str) -> Result<serde_json::Value, error::AppError> {
     let parsed: serde_json::Value = serde_json::from_str(json_content)?;
 
     parsed
@@ -235,7 +223,7 @@ fn extract_course_content(json_content: &str) -> Result<serde_json::Value, AppEr
         .and_then(|listed_path_data| listed_path_data.as_object())
         .and_then(|listed_path_data_obj| listed_path_data_obj.get("course"))
         .cloned()
-        .ok_or_else(|| AppError::MissingField("course".to_string()))
+        .ok_or_else(|| error::AppError::MissingField("course".to_string()))
 }
 
 /// Extracts course information from a JSON value and writes it to a CSV file.
@@ -260,13 +248,13 @@ fn extract_course_content(json_content: &str) -> Result<serde_json::Value, AppEr
 fn extract_course(
     course_content: &serde_json::Value,
     writer: &mut csv::Writer<std::fs::File>,
-) -> Result<(), AppError> {
+) -> Result<(), error::AppError> {
     let course_info: DataStruct = extract_info(course_content, None, 1)?;
     append_data_to_csv(&course_info, writer)?;
 
     let units: &Vec<serde_json::Value> = course_content["unitChildren"]
         .as_array()
-        .ok_or_else(|| AppError::MissingField("unitChildren".to_string()))?;
+        .ok_or_else(|| error::AppError::MissingField("unitChildren".to_string()))?;
 
     for (unit_order, unit) in units.iter().enumerate() {
         let unit_info: DataStruct =
@@ -275,7 +263,7 @@ fn extract_course(
 
         let lessons: &Vec<serde_json::Value> = unit["allOrderedChildren"]
             .as_array()
-            .ok_or_else(|| AppError::MissingField("allOrderedChildren".to_string()))?;
+            .ok_or_else(|| error::AppError::MissingField("allOrderedChildren".to_string()))?;
 
         for (lesson_order, lesson) in lessons.iter().enumerate() {
             let lesson_info: DataStruct =
@@ -285,7 +273,7 @@ fn extract_course(
             if lesson["__typename"] == "Lesson" {
                 let contents: &Vec<serde_json::Value> = lesson["curatedChildren"]
                     .as_array()
-                    .ok_or_else(|| AppError::MissingField("curatedChildren".to_string()))?;
+                    .ok_or_else(|| error::AppError::MissingField("curatedChildren".to_string()))?;
 
                 for (content_order, content) in contents.iter().enumerate() {
                     let content_info: DataStruct =
@@ -326,30 +314,30 @@ fn extract_info(
     item: &serde_json::Value,
     parent: Option<&DataStruct>,
     order: u32,
-) -> Result<DataStruct, AppError> {
+) -> Result<DataStruct, error::AppError> {
     Ok(DataStruct {
         id: item["id"]
             .as_str()
-            .ok_or_else(|| AppError::MissingField("id".to_string()))?
+            .ok_or_else(|| error::AppError::MissingField("id".to_string()))?
             .to_string(),
         type_name: item["__typename"]
             .as_str()
-            .ok_or_else(|| AppError::MissingField("__typename".to_string()))?
+            .ok_or_else(|| error::AppError::MissingField("__typename".to_string()))?
             .to_string(),
         order,
         title: item["translatedTitle"]
             .as_str()
-            .ok_or_else(|| AppError::MissingField("translatedTitle".to_string()))?
+            .ok_or_else(|| error::AppError::MissingField("translatedTitle".to_string()))?
             .to_string(),
         slug: item["slug"]
             .as_str()
-            .ok_or_else(|| AppError::MissingField("slug".to_string()))?
+            .ok_or_else(|| error::AppError::MissingField("slug".to_string()))?
             .to_string(),
         relative_url: item["relativeUrl"]
             .as_str()
             .or_else(|| item["urlWithinCurationNode"].as_str())
             .ok_or_else(|| {
-                AppError::MissingField("relativeUrl or urlWithinCurationNode".to_string())
+                error::AppError::MissingField("relativeUrl or urlWithinCurationNode".to_string())
             })?
             .to_string(),
         progress_key: item["progressKey"].as_str().map(|s| s.to_string()),
@@ -392,7 +380,10 @@ fn extract_info(
 ///   nested value as a `serde_json::Value`. On failure, returns an `AppError`
 ///   indicating the type of error that occurred, such as a missing field error
 ///   if any of the keys are not found in the JSON structure.
-fn extract_nested_value(json_content: &str, keys: &[&str]) -> Result<serde_json::Value, AppError> {
+fn extract_nested_value(
+    json_content: &str,
+    keys: &[&str],
+) -> Result<serde_json::Value, error::AppError> {
     let parsed: serde_json::Value = serde_json::from_str(json_content)?;
     let mut current_value = parsed;
 
@@ -400,7 +391,7 @@ fn extract_nested_value(json_content: &str, keys: &[&str]) -> Result<serde_json:
         current_value = current_value
             .as_object()
             .and_then(|obj| obj.get(*key).cloned())
-            .ok_or_else(|| AppError::MissingField(key.to_string()))?;
+            .ok_or_else(|| error::AppError::MissingField(key.to_string()))?;
     }
 
     Ok(current_value)
@@ -423,13 +414,13 @@ fn extract_nested_value(json_content: &str, keys: &[&str]) -> Result<serde_json:
 ///   extracted mastery level information. On failure, returns an `AppError` indicating the
 ///   type of error that occurred, such as a missing field error if the expected structure
 ///   is not found.
-fn extract_mastery_v2(json_content: &str) -> Result<MasteryV2, AppError> {
+fn extract_mastery_v2(json_content: &str) -> Result<MasteryV2, error::AppError> {
     let mastery_v2 = extract_nested_value(
         json_content,
         &["data", "user", "courseProgress", "currentMasteryV2"],
     )?;
 
-    serde_json::from_value(mastery_v2.clone()).map_err(AppError::Json)
+    serde_json::from_value(mastery_v2.clone()).map_err(error::AppError::Json)
 }
 
 /// Extracts the mastery map from a JSON string.
@@ -449,17 +440,17 @@ fn extract_mastery_v2(json_content: &str) -> Result<MasteryV2, AppError> {
 ///   structs containing the extracted mastery map information. On failure, returns an `AppError`
 ///   indicating the type of error that occurred, such as a missing field error if the expected
 ///   structure is not found.
-fn extract_mastery_map(json_content: &str) -> Result<Vec<MasteryMapItem>, AppError> {
+fn extract_mastery_map(json_content: &str) -> Result<Vec<MasteryMapItem>, error::AppError> {
     let mastery_map = extract_nested_value(
         json_content,
         &["data", "user", "courseProgress", "masteryMap"],
     )?;
     let mastery_map_items: Vec<MasteryMapItem> = mastery_map
         .as_array()
-        .ok_or_else(|| AppError::MissingField("masteryMap".to_string()))?
+        .ok_or_else(|| error::AppError::MissingField("masteryMap".to_string()))?
         .iter()
-        .map(|item| serde_json::from_value(item.clone()).map_err(AppError::Json))
-        .collect::<Result<Vec<MasteryMapItem>, AppError>>()?;
+        .map(|item| serde_json::from_value(item.clone()).map_err(error::AppError::Json))
+        .collect::<Result<Vec<MasteryMapItem>, error::AppError>>()?;
 
     Ok(mastery_map_items)
 }
@@ -481,17 +472,17 @@ fn extract_mastery_map(json_content: &str) -> Result<Vec<MasteryMapItem>, AppErr
 ///   structs containing the extracted unit progress information. On failure, returns an `AppError`
 ///   indicating the type of error that occurred, such as a missing field error if the expected
 ///   structure is not found.
-fn extract_unit_progresses(json_content: &str) -> Result<Vec<UnitProgress>, AppError> {
+fn extract_unit_progresses(json_content: &str) -> Result<Vec<UnitProgress>, error::AppError> {
     let unit_progresses = extract_nested_value(
         json_content,
         &["data", "user", "courseProgress", "unitProgresses"],
     )?;
     let unit_progress_items: Vec<UnitProgress> = unit_progresses
         .as_array()
-        .ok_or_else(|| AppError::MissingField("unitProgresses".to_string()))?
+        .ok_or_else(|| error::AppError::MissingField("unitProgresses".to_string()))?
         .iter()
-        .map(|item| serde_json::from_value(item.clone()).map_err(AppError::Json))
-        .collect::<Result<Vec<UnitProgress>, AppError>>()?;
+        .map(|item| serde_json::from_value(item.clone()).map_err(error::AppError::Json))
+        .collect::<Result<Vec<UnitProgress>, error::AppError>>()?;
 
     Ok(unit_progress_items)
 }
@@ -513,15 +504,17 @@ fn extract_unit_progresses(json_content: &str) -> Result<Vec<UnitProgress>, AppE
 ///   structs containing the extracted content item progress information. On failure, returns an `AppError`
 ///   indicating the type of error that occurred, such as a missing field error if the expected
 ///   structure is not found.
-fn extract_item_progresses(json_content: &str) -> Result<Vec<ContentItemProgress>, AppError> {
+fn extract_item_progresses(
+    json_content: &str,
+) -> Result<Vec<ContentItemProgress>, error::AppError> {
     let content_item_progresses =
         extract_nested_value(json_content, &["data", "user", "contentItemProgresses"])?;
     let content_item_progresses: Vec<ContentItemProgress> = content_item_progresses
         .as_array()
-        .ok_or_else(|| AppError::MissingField("contentItemProgresses".to_string()))?
+        .ok_or_else(|| error::AppError::MissingField("contentItemProgresses".to_string()))?
         .iter()
-        .map(|item| serde_json::from_value(item.clone()).map_err(AppError::Json))
-        .collect::<Result<Vec<ContentItemProgress>, AppError>>()?;
+        .map(|item| serde_json::from_value(item.clone()).map_err(error::AppError::Json))
+        .collect::<Result<Vec<ContentItemProgress>, error::AppError>>()?;
 
     Ok(content_item_progresses)
 }
@@ -540,7 +533,7 @@ fn extract_item_progresses(json_content: &str) -> Result<Vec<ContentItemProgress
 /// - `Result<String, AppError>`: On success, returns the decoded string as a `String`.
 ///   On failure, returns an `AppError` indicating the type of error that occurred,
 ///   such as a Base64 decoding error.
-fn decode_base64(position_key: &str) -> Result<String, AppError> {
+fn decode_base64(position_key: &str) -> Result<String, error::AppError> {
     let mut key = position_key.to_string();
     while key.len() % 4 != 0 {
         key.push('=');
@@ -548,7 +541,7 @@ fn decode_base64(position_key: &str) -> Result<String, AppError> {
     let decoded_position_key = base64::engine::general_purpose::STANDARD
         .decode(&key)
         .map_err(|e| {
-            AppError::Json(serde_json::Error::custom(format!(
+            error::AppError::Json(serde_json::Error::custom(format!(
                 "Base64 decode error: {}",
                 e
             )))
@@ -574,7 +567,7 @@ fn decode_base64(position_key: &str) -> Result<String, AppError> {
 /// - `Result<Vec<TopicQuizAttempt>, AppError>`: On success, returns a vector of `TopicQuizAttempt`
 ///   structs containing the extracted quiz attempt information. On failure, returns an `AppError`
 ///   indicating the type of error that occurred, such as a JSON parsing error or a Base64 decoding error.
-fn extract_quiz_attempts(json_content: &str) -> Result<Vec<TopicQuizAttempt>, AppError> {
+fn extract_quiz_attempts(json_content: &str) -> Result<Vec<TopicQuizAttempt>, error::AppError> {
     let parsed: serde_json::Value = serde_json::from_str(json_content)?;
     let quiz_attempts = parsed
         .pointer("/data/user/latestQuizAttempts")
@@ -583,7 +576,7 @@ fn extract_quiz_attempts(json_content: &str) -> Result<Vec<TopicQuizAttempt>, Ap
             arr.into_iter()
                 .map(|item| {
                     let mut quiz_attempt: TopicQuizAttempt =
-                        serde_json::from_value(item).map_err(AppError::Json)?;
+                        serde_json::from_value(item).map_err(error::AppError::Json)?;
                     let decoded_str = decode_base64(&quiz_attempt.position_key)?;
                     quiz_attempt.parent_id = decoded_str[decoded_str.find('\u{11}').unwrap() + 1
                         ..decoded_str.find('\u{c}').unwrap()]
@@ -591,7 +584,7 @@ fn extract_quiz_attempts(json_content: &str) -> Result<Vec<TopicQuizAttempt>, Ap
 
                     Ok(quiz_attempt)
                 })
-                .collect::<Result<Vec<TopicQuizAttempt>, AppError>>()
+                .collect::<Result<Vec<TopicQuizAttempt>, error::AppError>>()
         })
         .unwrap_or_else(|| Ok(vec![]))?;
 
@@ -614,7 +607,9 @@ fn extract_quiz_attempts(json_content: &str) -> Result<Vec<TopicQuizAttempt>, Ap
 /// - `Result<Vec<TopicUnitTestAttempt>, AppError>`: On success, returns a vector of `TopicUnitTestAttempt`
 ///   structs containing the extracted unit test attempt information. On failure, returns an `AppError`
 ///   indicating the type of error that occurred, such as a JSON parsing error or a Base64 decoding error.
-fn extract_unit_test_attempts(json_content: &str) -> Result<Vec<TopicUnitTestAttempt>, AppError> {
+fn extract_unit_test_attempts(
+    json_content: &str,
+) -> Result<Vec<TopicUnitTestAttempt>, error::AppError> {
     let parsed: serde_json::Value = serde_json::from_str(json_content)?;
     let unit_test_attempts = parsed
         .pointer("/data/user/latestUnitTestAttempts")
@@ -623,7 +618,7 @@ fn extract_unit_test_attempts(json_content: &str) -> Result<Vec<TopicUnitTestAtt
             arr.into_iter()
                 .map(|item| {
                     let mut quiz_attempt: TopicUnitTestAttempt =
-                        serde_json::from_value(item).map_err(AppError::Json)?;
+                        serde_json::from_value(item).map_err(error::AppError::Json)?;
                     let decoded_str = decode_base64(&quiz_attempt.id)?;
                     quiz_attempt.parent_id = decoded_str
                         [decoded_str.find(':').unwrap() + 1..decoded_str.find('\u{c}').unwrap()]
@@ -631,7 +626,7 @@ fn extract_unit_test_attempts(json_content: &str) -> Result<Vec<TopicUnitTestAtt
 
                     Ok(quiz_attempt)
                 })
-                .collect::<Result<Vec<TopicUnitTestAttempt>, AppError>>()
+                .collect::<Result<Vec<TopicUnitTestAttempt>, error::AppError>>()
         })
         .unwrap_or_else(|| Ok(vec![]))?;
 
@@ -661,7 +656,7 @@ fn extract_unit_test_attempts(json_content: &str) -> Result<Vec<TopicUnitTestAtt
 fn update_record(
     record: &mut csv::StringRecord,
     updates: &[(usize, &str)],
-) -> Result<(), AppError> {
+) -> Result<(), error::AppError> {
     let mut values: Vec<&str> = vec![];
     for i in 0..record.len() {
         if let Some(&(_, value)) = updates.iter().find(|&&(index, _)| index == i) {
@@ -670,7 +665,7 @@ fn update_record(
             values.push(
                 record
                     .get(i)
-                    .ok_or_else(|| AppError::MissingField(format!("Record index {}", i)))?,
+                    .ok_or_else(|| error::AppError::MissingField(format!("Record index {}", i)))?,
             );
         }
     }
@@ -723,7 +718,7 @@ fn update_csv<P: AsRef<std::path::Path>>(
     items_progresses: Vec<Vec<ContentItemProgress>>,
     quizzes_progresses: Vec<Vec<TopicQuizAttempt>>,
     tests_progresses: Vec<Vec<TopicUnitTestAttempt>>,
-) -> Result<(), AppError> {
+) -> Result<(), error::AppError> {
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
         .from_path(&filename)?;
@@ -879,7 +874,9 @@ fn update_csv<P: AsRef<std::path::Path>>(
 /// - `Result<Vec<String>, AppError>`: On success, returns a vector of strings, each representing
 ///   the name of a file in the specified directory. On failure, returns an `AppError` indicating
 ///   the type of error that occurred, such as an I/O error if the directory cannot be read.
-fn list_files_in_directory<P: AsRef<std::path::Path>>(path: P) -> Result<Vec<String>, AppError> {
+fn list_files_in_directory<P: AsRef<std::path::Path>>(
+    path: P,
+) -> Result<Vec<String>, error::AppError> {
     let mut file_list = Vec::new();
     for entry in std::fs::read_dir(path)? {
         let entry = entry?;
@@ -925,13 +922,13 @@ fn find_and_read_json_file(
     path: &str,
     prefix: &str,
     suffix: &str,
-) -> Result<String, AppError> {
+) -> Result<String, error::AppError> {
     let file_name = format!("{}{}", prefix, suffix);
     let file_path = files
         .iter()
         .find(|&file| file == &format!("{}.json", file_name) || file == &file_name)
         .map(|file| format!("{}/{}", path, file))
-        .ok_or_else(|| AppError::MissingFile(format!("{} file not found", suffix)))?;
+        .ok_or_else(|| error::AppError::MissingFile(format!("{} file not found", suffix)))?;
     read_json_file(file_path)
 }
 
@@ -967,7 +964,7 @@ fn find_and_read_json_files(
     path: &str,
     prefix: &str,
     suffix: &str,
-) -> Result<Vec<String>, AppError> {
+) -> Result<Vec<String>, error::AppError> {
     let file_prefix = format!("{}{}", prefix, suffix);
     let mut file_paths: Vec<String> = files
         .iter()
@@ -987,7 +984,7 @@ fn find_and_read_json_files(
     file_paths
         .into_iter()
         .map(read_json_file)
-        .collect::<Result<Vec<String>, AppError>>()
+        .collect::<Result<Vec<String>, error::AppError>>()
 }
 
 /// The main function serves as the entry point for the application, orchestrating the process
@@ -997,7 +994,7 @@ fn find_and_read_json_files(
 ///
 /// - `Result<(), AppError>`: On success, returns `Ok(())`. On failure, returns an `AppError`
 ///   indicating the type of error that occurred during the execution of the function.
-fn main() -> Result<(), AppError> {
+fn main() -> Result<(), error::AppError> {
     let args = Args::parse();
     let files = list_files_in_directory(&args.path)?;
 
