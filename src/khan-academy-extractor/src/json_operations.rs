@@ -92,14 +92,14 @@ pub fn extract_course(course_content: &Value, writer: &mut Writer<File>) -> Resu
 /// # Returns
 ///
 /// - `Result<(MasteryV2, Vec<MasteryMapItem>, Vec<UnitProgress>, Vec<Vec<ContentItemProgress>>, Vec<Vec<TopicQuizAttempt>>, Vec<Vec<TopicUnitTestAttempt>>), AppError>`:
-///   On success, returns a tuple containing:
-///   - `MasteryV2`: The extracted mastery data.
-///   - `Vec<MasteryMapItem>`: A vector of mastery map items.
-///   - `Vec<UnitProgress>`: A vector of unit progress data.
-///   - `Vec<Vec<ContentItemProgress>>`: A vector of vectors, each containing content item progress data for a unit.
-///   - `Vec<Vec<TopicQuizAttempt>>`: A vector of vectors, each containing quiz attempt data.
-///   - `Vec<Vec<TopicUnitTestAttempt>>`: A vector of vectors, each containing unit test attempt data.
-///   On failure, returns an `AppError` indicating the type of error that occurred during extraction.
+///   - On success, returns a tuple containing:
+///     - `MasteryV2`: The extracted mastery data.
+///     - `Vec<MasteryMapItem>`: A vector of mastery map items.
+///     - `Vec<UnitProgress>`: A vector of unit progress data.
+///     - `Vec<Vec<ContentItemProgress>>`: A vector of vectors, each containing content item progress data for a unit.
+///     - `Vec<Vec<TopicQuizAttempt>>`: A vector of vectors, each containing quiz attempt data.
+///     - `Vec<Vec<TopicUnitTestAttempt>>`: A vector of vectors, each containing unit test attempt data.
+///   - On failure, returns an `AppError` indicating the type of error that occurred during extraction.
 pub fn process_json_files(
     json_course_progress: &str,
     json_unit_progress_files: &[String],
