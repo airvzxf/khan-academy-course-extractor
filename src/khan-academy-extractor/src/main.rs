@@ -74,7 +74,6 @@ fn main() -> Result<(), AppError> {
         tests_progresses,
     ) = process_json_files(
         &json_course_progress,
-        &json_course_progress,
         &json_unit_progress_files,
         &json_quiz_test_progress_files,
     )?;

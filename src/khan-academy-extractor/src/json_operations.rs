@@ -101,7 +101,6 @@ pub fn extract_course(course_content: &Value, writer: &mut Writer<File>) -> Resu
 ///   - `Vec<Vec<TopicUnitTestAttempt>>`: A vector of vectors, each containing unit test attempt data.
 ///   On failure, returns an `AppError` indicating the type of error that occurred during extraction.
 pub fn process_json_files(
-    json_content: &str,
     json_course_progress: &str,
     json_unit_progress_files: &[String],
     json_quiz_test_progress_files: &[String],
