@@ -601,100 +601,90 @@ fn list_files_in_directory<P: AsRef<std::path::Path>>(path: P) -> Result<Vec<Str
     Ok(file_list)
 }
 
+fn find_and_read_json_file(
+    files: &[String],
+    path: &str,
+    prefix: &str,
+    suffix: &str,
+) -> Result<String, AppError> {
+    let file_name = format!("{}{}", prefix, suffix);
+    let file_path = files
+        .iter()
+        .find(|&file| file == &format!("{}.json", file_name) || file == &file_name)
+        .map(|file| format!("{}/{}", path, file))
+        .ok_or_else(|| AppError::MissingFile(format!("{} file not found", suffix)))?;
+    read_json_file(file_path)
+}
+
+fn find_and_read_json_files(
+    files: &[String],
+    path: &str,
+    prefix: &str,
+    suffix: &str,
+) -> Result<Vec<String>, AppError> {
+    let file_prefix = format!("{}{}", prefix, suffix);
+    let mut file_paths: Vec<String> = files
+        .iter()
+        .filter(|&file| {
+            (file.starts_with(&file_prefix) && file.ends_with(".json"))
+                || (file.starts_with(&file_prefix) && !file.contains('.'))
+        })
+        .map(|file| format!("{}/{}", path, file))
+        .collect();
+    file_paths.sort_by_key(|file| {
+        file.trim_end_matches(".json")
+            .rsplit('-')
+            .next()
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0)
+    });
+    file_paths
+        .into_iter()
+        .map(read_json_file)
+        .collect::<Result<Vec<String>, AppError>>()
+}
+
 fn main() -> Result<(), AppError> {
     let args = Args::parse();
-
     let files = list_files_in_directory(&args.path)?;
 
-    // TODO: Refactor this to use a more generic approach. Remove the duplication.
-    let json_content_file_name = format!("{}contentForPath", args.prefix);
-    let json_content_file_path = files
-        .iter()
-        .find(|&file| {
-            file == &format!("{}.json", json_content_file_name) || file == &json_content_file_name
-        })
-        .map(|file| format!("{}/{}", args.path, file))
-        .ok_or_else(|| AppError::MissingFile("contentForPath file not found".to_string()))?;
-
-    let json_course_progress_file_name = format!("{}courseProgressQuery", args.prefix);
-    let json_course_progress_file_path = files
-        .iter()
-        .find(|&file| {
-            file == &format!("{}.json", json_course_progress_file_name)
-                || file == &json_course_progress_file_name
-        })
-        .map(|file| format!("{}/{}", args.path, file))
-        .ok_or_else(|| AppError::MissingFile("courseProgressQuery file not found".to_string()))?;
-
-    // TODO: Refactor this to use a more generic approach. Remove the duplication.
-    let json_unit_progress_file_prefix =
-        format!("{}getUserInfoForTopicProgressMastery-", args.prefix);
-    let mut json_unit_progress_file_paths: Vec<String> = files
-        .iter()
-        .filter(|&file| {
-            (file.starts_with(&json_unit_progress_file_prefix) && file.ends_with(".json"))
-                || (file.starts_with(&json_unit_progress_file_prefix) && !file.contains('.'))
-        })
-        .map(|file| format!("{}/{}", args.path, file))
-        .collect();
-    json_unit_progress_file_paths.sort_by_key(|file| {
-        file.trim_end_matches(".json")
-            .rsplit('-')
-            .next()
-            .and_then(|s| s.parse::<u32>().ok())
-            .unwrap_or(0)
-    });
-
-    let json_quiz_test_progress_file_prefix =
-        format!("{}quizAndUnitTestAttemptsQuery-", args.prefix);
-    let mut json_quiz_test_progress_file_paths: Vec<String> = files
-        .iter()
-        .filter(|&file| {
-            (file.starts_with(&json_quiz_test_progress_file_prefix) && file.ends_with(".json"))
-                || (file.starts_with(&json_quiz_test_progress_file_prefix) && !file.contains('.'))
-        })
-        .map(|file| format!("{}/{}", args.path, file))
-        .collect();
-    json_quiz_test_progress_file_paths.sort_by_key(|file| {
-        file.trim_end_matches(".json")
-            .rsplit('-')
-            .next()
-            .and_then(|s| s.parse::<u32>().ok())
-            .unwrap_or(0)
-    });
+    let json_content = find_and_read_json_file(&files, &args.path, &args.prefix, "contentForPath")?;
+    let json_course_progress =
+        find_and_read_json_file(&files, &args.path, &args.prefix, "courseProgressQuery")?;
+    let json_unit_progress_files = find_and_read_json_files(
+        &files,
+        &args.path,
+        &args.prefix,
+        "getUserInfoForTopicProgressMastery-",
+    )?;
+    let json_quiz_test_progress_files = find_and_read_json_files(
+        &files,
+        &args.path,
+        &args.prefix,
+        "quizAndUnitTestAttemptsQuery-",
+    )?;
 
     let output_csv_file = format!("{}/{}information.csv", args.path, args.prefix);
 
-    let json_content: String = read_json_file(json_content_file_path)?;
     let course_content: serde_json::Value = extract_course_content(&json_content)?;
     let mut writer: csv::Writer<std::fs::File> = create_csv_file(&output_csv_file)?;
     extract_course(&course_content, &mut writer)?;
     writer.flush()?;
 
-    let json_course_progress: String = read_json_file(json_course_progress_file_path)?;
     let mastery_v2: MasteryV2 = extract_mastery_v2(&json_course_progress)?;
     let mastery_map: Vec<MasteryMapItem> = extract_mastery_map(&json_course_progress)?;
     let unit_progress: Vec<UnitProgress> = extract_unit_progresses(&json_course_progress)?;
-    let items_progresses: Vec<Vec<ContentItemProgress>> = json_unit_progress_file_paths
+    let items_progresses: Vec<Vec<ContentItemProgress>> = json_unit_progress_files
         .iter()
-        .map(|file_path| {
-            let json_content = read_json_file(file_path).unwrap();
-            extract_item_progresses(&json_content).unwrap()
-        })
+        .map(|json_content| extract_item_progresses(json_content).unwrap())
         .collect();
-    let quizzes_progresses: Vec<Vec<TopicQuizAttempt>> = json_quiz_test_progress_file_paths
+    let quizzes_progresses: Vec<Vec<TopicQuizAttempt>> = json_quiz_test_progress_files
         .iter()
-        .map(|file_path| {
-            let json_content = read_json_file(file_path).unwrap();
-            extract_quiz_attempts(&json_content).unwrap()
-        })
+        .map(|json_content| extract_quiz_attempts(json_content).unwrap())
         .collect();
-    let tests_progresses: Vec<Vec<TopicUnitTestAttempt>> = json_quiz_test_progress_file_paths
+    let tests_progresses: Vec<Vec<TopicUnitTestAttempt>> = json_quiz_test_progress_files
         .iter()
-        .map(|file_path| {
-            let json_content = read_json_file(file_path).unwrap();
-            extract_unit_test_attempts(&json_content).unwrap()
-        })
+        .map(|json_content| extract_unit_test_attempts(json_content).unwrap())
         .collect();
 
     update_csv(
