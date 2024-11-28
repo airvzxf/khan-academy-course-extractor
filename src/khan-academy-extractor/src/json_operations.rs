@@ -12,6 +12,15 @@ use csv::Writer;
 use serde_json::Value;
 use std::fs::File;
 
+type MasteryData = (
+    MasteryV2,
+    Vec<MasteryMapItem>,
+    Vec<UnitProgress>,
+    Vec<Vec<ContentItemProgress>>,
+    Vec<Vec<TopicQuizAttempt>>,
+    Vec<Vec<TopicUnitTestAttempt>>,
+);
+
 /// Extracts course information from a JSON value and writes it to a CSV file.
 ///
 /// This function navigates through the JSON structure representing a course,
@@ -70,51 +79,31 @@ pub fn extract_course(course_content: &Value, writer: &mut Writer<File>) -> Resu
     Ok(())
 }
 
-/// Processes various JSON files to extract course progress data.
+/// Processes JSON files to extract mastery data, unit progress, and quiz/test attempts.
 ///
-/// This function takes JSON strings representing different aspects of course progress,
-/// such as mastery, unit progress, and quiz/test attempts, and extracts relevant data
-/// into structured types.
+/// This function takes JSON strings representing course progress, unit progress, and quiz/test progress,
+/// and extracts relevant data into structured types. The extracted data includes mastery information,
+/// unit progress, item progresses, quiz attempts, and test attempts.
 ///
 /// # Parameters
 ///
-/// - `json_content`: A string slice representing the JSON content of the course.
-///   This parameter is currently unused in the function but may be used for future extensions.
-/// - `json_course_progress`: A string slice containing JSON data related to the overall
-///   course progress, including mastery and unit progress information.
-/// - `json_unit_progress_files`: A slice of strings, each representing JSON data for
-///   individual unit progress. This data is used to extract progress information for
-///   each content item within the units.
-/// - `json_quiz_test_progress_files`: A slice of strings, each representing JSON data for
-///   quiz and test attempts. This data is used to extract progress information for quizzes
-///   and unit tests.
+/// - `json_course_progress`: A string slice representing the JSON content of the course progress.
+///   This JSON is expected to contain information about mastery and unit progress.
+/// - `json_unit_progress_files`: A slice of strings, each representing the JSON content of unit progress files.
+///   These JSON files contain information about the progress of individual content items within units.
+/// - `json_quiz_test_progress_files`: A slice of strings, each representing the JSON content of quiz/test progress files.
+///   These JSON files contain information about quiz attempts and unit test attempts.
 ///
 /// # Returns
 ///
-/// - `Result<(MasteryV2, Vec<MasteryMapItem>, Vec<UnitProgress>, Vec<Vec<ContentItemProgress>>, Vec<Vec<TopicQuizAttempt>>, Vec<Vec<TopicUnitTestAttempt>>), AppError>`:
-///   - On success, returns a tuple containing:
-///     - `MasteryV2`: The extracted mastery data.
-///     - `Vec<MasteryMapItem>`: A vector of mastery map items.
-///     - `Vec<UnitProgress>`: A vector of unit progress data.
-///     - `Vec<Vec<ContentItemProgress>>`: A vector of vectors, each containing content item progress data for a unit.
-///     - `Vec<Vec<TopicQuizAttempt>>`: A vector of vectors, each containing quiz attempt data.
-///     - `Vec<Vec<TopicUnitTestAttempt>>`: A vector of vectors, each containing unit test attempt data.
-///   - On failure, returns an `AppError` indicating the type of error that occurred during extraction.
+/// - `Result<MasteryData, AppError>`: On success, returns a tuple containing mastery data, mastery map,
+///   unit progress, item progresses, quiz attempts, and test attempts. On failure, returns an `AppError`
+///   indicating the type of error that occurred during the extraction process.
 pub fn process_json_files(
     json_course_progress: &str,
     json_unit_progress_files: &[String],
     json_quiz_test_progress_files: &[String],
-) -> Result<
-    (
-        MasteryV2,
-        Vec<MasteryMapItem>,
-        Vec<UnitProgress>,
-        Vec<Vec<ContentItemProgress>>,
-        Vec<Vec<TopicQuizAttempt>>,
-        Vec<Vec<TopicUnitTestAttempt>>,
-    ),
-    AppError,
-> {
+) -> Result<MasteryData, AppError> {
     let mastery_v2: MasteryV2 = extract_mastery_v2(json_course_progress)?;
     let mastery_map: Vec<MasteryMapItem> = extract_mastery_map(json_course_progress)?;
     let unit_progress: Vec<UnitProgress> = extract_unit_progresses(json_course_progress)?;
