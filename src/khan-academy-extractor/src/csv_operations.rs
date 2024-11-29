@@ -1,9 +1,10 @@
 use crate::error::AppError;
 use crate::models::{
-    ContentItemProgress, MasteryMapItem, MasteryV2, TopicQuizAttempt, TopicUnitTestAttempt,
-    UnitProgress,
+    BestScore, ContentItemProgress, MasteryMapItem, MasteryV2, TopicQuizAttempt,
+    TopicUnitTestAttempt, UnitProgress,
 };
-use csv::{ReaderBuilder, StringRecord, WriterBuilder};
+use csv::{Reader, ReaderBuilder, StringRecord, Writer, WriterBuilder};
+use std::fs::File;
 use std::path::Path;
 
 /// Updates a CSV record with new values at specified indices.
@@ -89,7 +90,7 @@ pub fn update_csv<P: AsRef<Path>>(
     quizzes_progresses: Vec<Vec<TopicQuizAttempt>>,
     tests_progresses: Vec<Vec<TopicUnitTestAttempt>>,
 ) -> Result<(), AppError> {
-    let mut reader = ReaderBuilder::new()
+    let mut reader: Reader<File> = ReaderBuilder::new()
         .has_headers(true)
         .from_path(&filename)?;
     let mut records: Vec<StringRecord> = reader.records().collect::<Result<_, _>>()?;
@@ -143,14 +144,14 @@ pub fn update_csv<P: AsRef<Path>>(
                 .iter_mut()
                 .find(|record| record.get(6).unwrap() == item_progress.content.progress_key)
             {
-                let best_score = item_progress.best_score.as_ref();
-                let num_attempted = best_score
+                let best_score: Option<&BestScore> = item_progress.best_score.as_ref();
+                let num_attempted: Option<String> = best_score
                     .and_then(|bs| bs.num_attempted)
                     .map(|v| v.to_string());
-                let num_correct = best_score
+                let num_correct: Option<String> = best_score
                     .and_then(|bs| bs.num_correct)
                     .map(|v| v.to_string());
-                let num_incorrect = num_attempted.as_ref().and_then(|na| {
+                let num_incorrect: Option<String> = num_attempted.as_ref().and_then(|na| {
                     num_correct.as_ref().map(|nc| {
                         (na.parse::<u32>().unwrap() - nc.parse::<u32>().unwrap()).to_string()
                     })
@@ -174,8 +175,8 @@ pub fn update_csv<P: AsRef<Path>>(
                 record.get(7).unwrap() == quiz_attempt.parent_id
                     && record.get(1).unwrap() == "TopicQuiz"
             }) {
-                let num_incorrect = quiz_attempt.num_attempted - quiz_attempt.num_correct;
-                let completed = if quiz_attempt.is_completed {
+                let num_incorrect: u32 = quiz_attempt.num_attempted - quiz_attempt.num_correct;
+                let completed: &str = if quiz_attempt.is_completed {
                     "COMPLETE"
                 } else {
                     "UNCOMPLETED"
@@ -199,8 +200,8 @@ pub fn update_csv<P: AsRef<Path>>(
                 record.get(8).unwrap() == test_attempt.parent_id
                     && record.get(1).unwrap() == "TopicUnitTest"
             }) {
-                let num_incorrect = test_attempt.num_attempted - test_attempt.num_correct;
-                let completed = if test_attempt.is_completed {
+                let num_incorrect: u32 = test_attempt.num_attempted - test_attempt.num_correct;
+                let completed: &str = if test_attempt.is_completed {
                     "COMPLETE"
                 } else {
                     "UNCOMPLETED"
@@ -218,7 +219,7 @@ pub fn update_csv<P: AsRef<Path>>(
         }
     }
 
-    let mut writer = WriterBuilder::new().from_path(filename)?;
+    let mut writer: Writer<File> = WriterBuilder::new().from_path(filename)?;
     writer.write_byte_record(reader.headers()?.as_byte_record())?;
     for record in records {
         writer.write_record(&record)?;

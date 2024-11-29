@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use crate::json_utils::read_json_file;
-use std::fs::read_dir;
-use std::path::Path;
+use std::fs::{read_dir, DirEntry};
+use std::path::{Path, PathBuf};
 
 /// Lists all files in the specified directory.
 ///
@@ -20,10 +20,10 @@ use std::path::Path;
 ///   the name of a file in the specified directory. On failure, returns an `AppError` indicating
 ///   the type of error that occurred, such as an I/O error if the directory cannot be read.
 pub fn list_files_in_directory<P: AsRef<Path>>(path: P) -> Result<Vec<String>, AppError> {
-    let mut file_list = Vec::new();
+    let mut file_list: Vec<String> = Vec::new();
     for entry in read_dir(path)? {
-        let entry = entry?;
-        let path = entry.path();
+        let entry: DirEntry = entry?;
+        let path: PathBuf = entry.path();
         if path.is_file() {
             if let Some(file_name) = path.file_name() {
                 if let Some(file_name_str) = file_name.to_str() {
@@ -66,8 +66,8 @@ pub fn find_and_read_json_file(
     prefix: &str,
     suffix: &str,
 ) -> Result<String, AppError> {
-    let file_name = format!("{}{}", prefix, suffix);
-    let file_path = files
+    let file_name: String = format!("{}{}", prefix, suffix);
+    let file_path: String = files
         .iter()
         .find(|&file| file == &format!("{}.json", file_name) || file == &file_name)
         .map(|file| format!("{}/{}", path, file))
@@ -108,7 +108,7 @@ pub fn find_and_read_json_files(
     prefix: &str,
     suffix: &str,
 ) -> Result<Vec<String>, AppError> {
-    let file_prefix = format!("{}{}", prefix, suffix);
+    let file_prefix: String = format!("{}{}", prefix, suffix);
     let mut file_paths: Vec<String> = files
         .iter()
         .filter(|&file| {

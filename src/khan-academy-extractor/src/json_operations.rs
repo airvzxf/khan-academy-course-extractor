@@ -12,7 +12,7 @@ use csv::Writer;
 use serde_json::Value;
 use std::fs::File;
 
-type MasteryData = (
+pub type MasteryData = (
     MasteryV2,
     Vec<MasteryMapItem>,
     Vec<UnitProgress>,

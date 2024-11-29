@@ -32,14 +32,14 @@ pub struct FileContents {
 /// * Any of the required JSON files are not found
 /// * There are issues reading the contents of the files
 pub fn read_files(path: &str, prefix: &str) -> Result<FileContents, AppError> {
-    let files = list_files_in_directory(path)?;
+    let files: Vec<String> = list_files_in_directory(path)?;
 
-    let json_content = find_and_read_json_file(&files, path, prefix, "contentForPath")?;
-    let json_course_progress =
+    let json_content: String = find_and_read_json_file(&files, path, prefix, "contentForPath")?;
+    let json_course_progress: String =
         find_and_read_json_file(&files, path, prefix, "courseProgressQuery")?;
-    let json_unit_progress_files =
+    let json_unit_progress_files: Vec<String> =
         find_and_read_json_files(&files, path, prefix, "getUserInfoForTopicProgressMastery-")?;
-    let json_quiz_test_progress_files =
+    let json_quiz_test_progress_files: Vec<String> =
         find_and_read_json_files(&files, path, prefix, "quizAndUnitTestAttemptsQuery-")?;
 
     Ok(FileContents {

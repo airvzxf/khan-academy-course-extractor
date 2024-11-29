@@ -132,7 +132,7 @@ pub fn extract_info(
 ///   type of error that occurred, such as a missing field error if the expected structure
 ///   is not found.
 pub fn extract_mastery_v2(json_content: &str) -> Result<MasteryV2, AppError> {
-    let mastery_v2 = extract_nested_value(
+    let mastery_v2: Value = extract_nested_value(
         json_content,
         &["data", "user", "courseProgress", "currentMasteryV2"],
     )?;
@@ -158,7 +158,7 @@ pub fn extract_mastery_v2(json_content: &str) -> Result<MasteryV2, AppError> {
 ///   indicating the type of error that occurred, such as a missing field error if the expected
 ///   structure is not found.
 pub fn extract_mastery_map(json_content: &str) -> Result<Vec<MasteryMapItem>, AppError> {
-    let mastery_map = extract_nested_value(
+    let mastery_map: Value = extract_nested_value(
         json_content,
         &["data", "user", "courseProgress", "masteryMap"],
     )?;
@@ -190,7 +190,7 @@ pub fn extract_mastery_map(json_content: &str) -> Result<Vec<MasteryMapItem>, Ap
 ///   indicating the type of error that occurred, such as a missing field error if the expected
 ///   structure is not found.
 pub fn extract_unit_progresses(json_content: &str) -> Result<Vec<UnitProgress>, AppError> {
-    let unit_progresses = extract_nested_value(
+    let unit_progresses: Value = extract_nested_value(
         json_content,
         &["data", "user", "courseProgress", "unitProgresses"],
     )?;
@@ -222,7 +222,7 @@ pub fn extract_unit_progresses(json_content: &str) -> Result<Vec<UnitProgress>, 
 ///   indicating the type of error that occurred, such as a missing field error if the expected
 ///   structure is not found.
 pub fn extract_item_progresses(json_content: &str) -> Result<Vec<ContentItemProgress>, AppError> {
-    let content_item_progresses =
+    let content_item_progresses: Value =
         extract_nested_value(json_content, &["data", "user", "contentItemProgresses"])?;
     let content_item_progresses: Vec<ContentItemProgress> = content_item_progresses
         .as_array()
@@ -252,7 +252,7 @@ pub fn extract_item_progresses(json_content: &str) -> Result<Vec<ContentItemProg
 ///   indicating the type of error that occurred, such as a JSON parsing error or a Base64 decoding error.
 pub fn extract_quiz_attempts(json_content: &str) -> Result<Vec<TopicQuizAttempt>, AppError> {
     let parsed: Value = from_str(json_content)?;
-    let quiz_attempts = parsed
+    let quiz_attempts: Vec<TopicQuizAttempt> = parsed
         .pointer("/data/user/latestQuizAttempts")
         .and_then(|v| v.as_array().cloned())
         .map(|arr| {
@@ -260,7 +260,7 @@ pub fn extract_quiz_attempts(json_content: &str) -> Result<Vec<TopicQuizAttempt>
                 .map(|item| {
                     let mut quiz_attempt: TopicQuizAttempt =
                         from_value(item).map_err(AppError::Json)?;
-                    let decoded_str = decode_base64(&quiz_attempt.position_key)?;
+                    let decoded_str: String = decode_base64(&quiz_attempt.position_key)?;
                     quiz_attempt.parent_id = decoded_str[decoded_str.find('\u{11}').unwrap() + 1
                         ..decoded_str.find('\u{c}').unwrap()]
                         .to_string();
@@ -294,7 +294,7 @@ pub fn extract_unit_test_attempts(
     json_content: &str,
 ) -> Result<Vec<TopicUnitTestAttempt>, AppError> {
     let parsed: Value = from_str(json_content)?;
-    let unit_test_attempts = parsed
+    let unit_test_attempts: Vec<TopicUnitTestAttempt> = parsed
         .pointer("/data/user/latestUnitTestAttempts")
         .and_then(|v| v.as_array().cloned())
         .map(|arr| {
@@ -302,7 +302,7 @@ pub fn extract_unit_test_attempts(
                 .map(|item| {
                     let mut quiz_attempt: TopicUnitTestAttempt =
                         from_value(item).map_err(AppError::Json)?;
-                    let decoded_str = decode_base64(&quiz_attempt.id)?;
+                    let decoded_str: String = decode_base64(&quiz_attempt.id)?;
                     quiz_attempt.parent_id = decoded_str
                         [decoded_str.find(':').unwrap() + 1..decoded_str.find('\u{c}').unwrap()]
                         .to_string();
@@ -331,14 +331,14 @@ pub fn extract_unit_test_attempts(
 ///   On failure, returns an `AppError` indicating the type of error that occurred,
 ///   such as a Base64 decoding error.
 pub fn decode_base64(position_key: &str) -> Result<String, AppError> {
-    let mut key = position_key.to_string();
+    let mut key: String = position_key.to_string();
     while key.len() % 4 != 0 {
         key.push('=');
     }
-    let decoded_position_key = STANDARD
+    let decoded_position_key: Vec<u8> = STANDARD
         .decode(&key)
         .map_err(|e| AppError::Json(Error::custom(format!("Base64 decode error: {}", e))))?;
-    let decoded_str = String::from_utf8_lossy(&decoded_position_key).to_string();
+    let decoded_str: String = String::from_utf8_lossy(&decoded_position_key).to_string();
 
     Ok(decoded_str)
 }

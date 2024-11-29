@@ -45,7 +45,7 @@ pub fn read_json_file<P: AsRef<Path>>(path: P) -> Result<String, AppError> {
 ///   if any of the keys are not found in the JSON structure.
 pub fn extract_nested_value(json_content: &str, keys: &[&str]) -> Result<Value, AppError> {
     let parsed: Value = from_str(json_content)?;
-    let mut current_value = parsed;
+    let mut current_value: Value = parsed;
 
     for key in keys {
         current_value = current_value
