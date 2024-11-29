@@ -29,15 +29,26 @@ use std::fs::File;
 /// - `Result<(), AppError>`: On success, returns `Ok(())`. On failure, returns an `AppError`
 ///   indicating the type of error that occurred during the execution of the function.
 fn main() -> Result<(), AppError> {
+    // Parse command-line arguments
     let args: Args = Args::parse();
+
+    // Read files based on the provided path and prefix
     let file_contents: FileContents = read_files(&args.path, &args.prefix)?;
+
+    // Define the output CSV file path
     let output_csv_file: String = format!("{}/{}information.csv", args.path, args.prefix);
+
+    // Extract course content from JSON
     let course_content: Value = extract_course_content(&file_contents.json_content)?;
 
+    // Create a CSV writer
     let mut writer: Writer<File> = create_csv_file(&output_csv_file)?;
+
+    // Extract course data and write to CSV
     extract_course(&course_content, &mut writer)?;
     writer.flush()?;
 
+    // Process JSON files to extract mastery data
     let (
         mastery_v2,
         mastery_map,
@@ -51,6 +62,7 @@ fn main() -> Result<(), AppError> {
         &file_contents.json_quiz_test_progress_files,
     )?;
 
+    // Update the CSV file with the extracted mastery data
     update_csv(
         output_csv_file,
         mastery_v2,

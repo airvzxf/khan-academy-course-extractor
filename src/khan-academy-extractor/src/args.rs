@@ -1,5 +1,6 @@
 use clap::Parser;
 
+/// Command-line arguments for the application.
 #[derive(Parser)]
 pub struct Args {
     /// Directory path
